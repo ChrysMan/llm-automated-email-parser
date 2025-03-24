@@ -18,11 +18,11 @@ Run the following command in your project's root directory:
 
 #### For Linux/macOS: 
 ```sh
-python3 -m venv my_project_env
+python3 -m venv venv
 ```
 #### For Windows: 
 ```sh
-python -m venv my_project_env
+python -m venv venv
 ```
 
 ### Activate the Virtual Environment:
@@ -33,10 +33,6 @@ source venv/bin/activate
 #### For Windows (Command Prompt): 
 ```sh
 venv\Scripts\activate
-```
-#### For Windows (PowerShell): 
-```sh
-(venv) user@machine:~/project$
 ```
 ### Install Dependencies:
 ```sh
