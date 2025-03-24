@@ -1,5 +1,5 @@
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import PydanticOutputParser
+from langchain_core.output_parsers import JsonOutputParser, PydanticOutputParser
 from langchain_ollama import ChatOllama
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -13,7 +13,7 @@ class EmailInfo(BaseModel):
     subject: Optional[str] = Field(None, description="The subject of the email.")
     body: str = Field(..., description="The email body, excluding unnecessary whitespace.")
  
-parser = PydanticOutputParser(pydantic_object=EmailInfo)
+parser = JsonOutputParser(pydantic_object=EmailInfo)
 
 prompt = ChatPromptTemplate.from_messages(
     [
