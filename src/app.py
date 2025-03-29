@@ -7,6 +7,7 @@ from utils.logging_config import LOGGER
 from utils.graph_utils import extract_msg_file, write_file, append_file, split_email_chain
 from chains.email_parser import EMAIL_PARSER_CHAIN, EmailInfo
 from chains.split_emails import SPLIT_EMAILS_CHAIN
+from langchain_core.output_parsers import CommaSeparatedListOutputParser, ListOutputParser
 
 class EmailProcessingState(TypedDict): 
     email_graph: nx.DiGraph             
@@ -30,18 +31,17 @@ def split_emails(state: InputState) -> EmailProcessingState:
     
     LOGGER.info("Splitting emails...")
     try:
-        #email_list = SPLIT_EMAILS_CHAIN.invoke({"emails": state["msg_content"]})
-        email_list=split_email_chain(state["msg_content"])
-        print(type(email_list))
+        raw_model_output = SPLIT_EMAILS_CHAIN.invoke({"emails": state["msg_content"]})
+        #email_list=split_email_chain(state["msg_content"])
+        
+        #print(raw_model_output.emails)
+        email_list = raw_model_output.emails     
+        #write_file(email_list, "emailSplit.txt")
         #print(email_list)
         reversed_list = email_list[::-1]
     except Exception as e:
         LOGGER.error(f"Failed to split emails: {e}")
 
-    write_file("", "emailSplit.txt")
-
-    for email in reversed_list:
-        append_file(f"\n--------------\n{email}", "emailSplit.txt")
 
     write_file("", "emailInfo.txt")
 
@@ -101,7 +101,7 @@ def run_pipeline(file_path: str):
     
     raw_msg_content = extract_msg_file(file_path)
 
-    #clean_msg_content = re.sub(r"^\s+|\s{2,}", "\n", raw_msg_content)
+    clean_msg_content = re.sub(r"^\s+|\s{2,}", "\n", raw_msg_content)
     #write_file(clean_msg_content, "raw.txt")
 
 
@@ -116,7 +116,7 @@ def run_pipeline(file_path: str):
 
     email_agent_graph = workflow.compile()
 
-    final_state = email_agent_graph.invoke({"msg_content": raw_msg_content}) 
+    final_state = email_agent_graph.invoke({"msg_content": clean_msg_content}) 
 
     return final_state["processed_emails"]
 
