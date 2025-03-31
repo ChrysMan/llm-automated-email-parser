@@ -33,18 +33,25 @@ def split_emails(state: InputState) -> EmailProcessingState:
     try:
         raw_model_output = SPLIT_EMAILS_CHAIN.invoke({"emails": state["msg_content"]})
         #email_list=split_email_chain(state["msg_content"])
-        
+        LOGGER.info("Splitted emails...")
         #print(raw_model_output.emails)
-        email_list = raw_model_output.emails     
-        #write_file(email_list, "emailSplit.txt")
+        '''parsed_json = json.loads(raw_model_output)
+        email_list = parsed_json["email"]
+        LOGGER.info("Created email_list...") '''   
+        print(type(raw_model_output))
+        
+        LOGGER.info("wrote to file...")
         #print(email_list)
-        reversed_list = email_list[::-1]
+        reversed_list = raw_model_output[::-1]
+        write_file("", "emailSplit.json")
+        
+        with open("emailSplit.json", "a", encoding="utf-8") as file:
+                json.dump(reversed_list, file, indent=4, ensure_ascii=False, default=str)
     except Exception as e:
         LOGGER.error(f"Failed to split emails: {e}")
 
-
     write_file("", "emailInfo.txt")
-
+    
     graph = nx.DiGraph()
 
     LOGGER.info("Creating Graph...")
@@ -116,7 +123,7 @@ def run_pipeline(file_path: str):
 
     email_agent_graph = workflow.compile()
 
-    final_state = email_agent_graph.invoke({"msg_content": clean_msg_content}) 
+    final_state = email_agent_graph.invoke({"msg_content": raw_msg_content}) 
 
     return final_state["processed_emails"]
 
