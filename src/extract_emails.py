@@ -8,7 +8,7 @@ from chains.email_parser import EMAIL_PARSER_CHAIN, EmailInfo
 from chains.split_emails import SPLIT_EMAILS_CHAIN
 from langchain_core.output_parsers import CommaSeparatedListOutputParser, ListOutputParser
 
-def split_emails(msg: str):
+def split_emails(msg: str) -> List[str]:
     LOGGER.info("Splitting emails...")
     try:
         raw_model_output = SPLIT_EMAILS_CHAIN.invoke({"emails": msg})
