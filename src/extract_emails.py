@@ -21,6 +21,19 @@ def split_emails(msg: str):
     except Exception as e:
         LOGGER.error(f"Failed to split emails: {e}")
 
+    graph = nx.DiGraph()
+
+    LOGGER.info("Creating Graph...")
+    try:
+        for n, email in enumerate(reversed_list):
+            n+=1
+            graph.add_node(n, email_node=email)
+            if n > 1: 
+                graph.add_edge(n-1, n)
+    except Exception as e:
+        LOGGER.error(f"Failed to create graph: {e}")
+
+
     return reversed_list
 
 if __name__ == "__main__":
