@@ -58,9 +58,11 @@ if __name__ == "__main__":
             file_path = os.path.join(dir_path, filename)
             try:
                 raw_msg_content = extract_msg_file(file_path)
-                clean_msg_content = re.sub(r"^\s+|\s{2,}", "\n", raw_msg_content)
-                # choose between raw_msf_content or clean_msg_content
-                email_data = split_emails(raw_msg_content) 
+                clean_msg_content = re.sub(r"^[ \t]+", "", raw_msg_content, flags=re.MULTILINE)
+                clean_msg_content = re.sub(r"\n\s*\n+", "\n\n", clean_msg_content)
+                write_file(clean_msg_content, "clean.txt")
+                
+                email_data = split_emails(clean_msg_content) 
                 with open(output_path, "a", encoding="utf-8") as file:
                     json.dump(email_data, file, indent=4, ensure_ascii=False, default=str)
             except Exception as e:
