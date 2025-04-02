@@ -38,7 +38,13 @@ Subject: {msg.subject}
 """
     return msg_to_text
 
-def split_email_chain(text): 
+def clean_data(text: str) -> str:
+    """ Cleans the text data by removing unnecessary spaces and new lines. """
+    clean_text = re.sub(r"^[ \t]+", "", text, flags=re.MULTILINE)
+    clean_text = re.sub(r"\n\s*\n+", "\n\n", clean_text)
+    return clean_text
+
+def split_email_chain(text: str) -> list: 
     """ Separates the emails using the word "From" or "On...wrote:" as an indicator to seperate. """
     seperator = re.compile(r"(?<=\n)\s*(From:|On .+ wrote:)", re.MULTILINE)
     email_parts = re.split(seperator, text)
@@ -48,6 +54,7 @@ def split_email_chain(text):
         if i % 2 ==1:
             formatted_parts.append(f"{part}")
         else:
-            clean_part = re.sub(r"^\s+|\s{2,}", "\n", part)
+            clean_part = clean_data(part)
             formatted_parts[-1] += f"{clean_part}"
     return formatted_parts
+

@@ -3,13 +3,13 @@ import networkx as nx
 from networkx.readwrite import json_graph
 from typing import List
 from utils.logging_config import LOGGER
-from utils.graph_utils import extract_msg_file, write_file, append_file, split_email_chain
-from chains.split_emails import SPLIT_EMAILS_CHAIN
+from utils.graph_utils import extract_msg_file, write_file, append_file, clean_data
+from chains.split_emails import split_and_extract_email_data
 
 def split_emails(msg: str) -> List[str]:
     LOGGER.info("Splitting emails...")
     try:
-        raw_model_output = SPLIT_EMAILS_CHAIN.invoke({"emails": msg})
+        raw_model_output = split_and_extract_email_data(msg)
         
         LOGGER.info("Splitted emails...")
         
@@ -57,8 +57,7 @@ if __name__ == "__main__":
             file_path = os.path.abspath(os.path.join(dir_path, filename))
             try:
                 raw_msg_content = extract_msg_file(file_path)
-                clean_msg_content = re.sub(r"^[ \t]+", "", raw_msg_content, flags=re.MULTILINE)
-                clean_msg_content = re.sub(r"\n\s*\n+", "\n\n", clean_msg_content)
+                clean_msg_content = clean_data(raw_msg_content)
                 write_file(clean_msg_content, "clean.txt")
                 
                 email_data = split_emails(clean_msg_content) 
