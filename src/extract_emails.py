@@ -1,12 +1,10 @@
 import extract_msg, json, re, os, sys, ollama
 import networkx as nx
 from networkx.readwrite import json_graph
-from typing import List, Optional, TypedDict, Literal
+from typing import List
 from utils.logging_config import LOGGER
 from utils.graph_utils import extract_msg_file, write_file, append_file, split_email_chain
-from chains.email_parser import EMAIL_PARSER_CHAIN, EmailInfo
 from chains.split_emails import SPLIT_EMAILS_CHAIN
-from langchain_core.output_parsers import CommaSeparatedListOutputParser, ListOutputParser
 
 def split_emails(msg: str) -> List[str]:
     LOGGER.info("Splitting emails...")
@@ -56,6 +54,7 @@ if __name__ == "__main__":
     for filename in os.listdir(dir_path):
         if filename.endswith(".msg"):
             file_path = os.path.join(dir_path, filename)
+            file_path = os.path.abspath(os.path.join(dir_path, filename))
             try:
                 raw_msg_content = extract_msg_file(file_path)
                 clean_msg_content = re.sub(r"^[ \t]+", "", raw_msg_content, flags=re.MULTILINE)

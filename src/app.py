@@ -40,11 +40,11 @@ def split_emails(state: InputState) -> EmailProcessingState:
         LOGGER.info("Created email_list...") '''   
         print(type(raw_model_output))
         
-        LOGGER.info("wrote to file...")
+        
         #print(email_list)
         reversed_list = raw_model_output[::-1]
         write_file("", "emailSplit.json")
-        
+        LOGGER.info("wrote to file...")
         with open("emailSplit.json", "a", encoding="utf-8") as file:
                 json.dump(reversed_list, file, indent=4, ensure_ascii=False, default=str)
     except Exception as e:
