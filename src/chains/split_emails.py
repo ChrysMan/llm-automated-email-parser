@@ -2,9 +2,8 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser, CommaSeparatedListOutputParser
 from langchain_ollama import OllamaLLM
 from pydantic import BaseModel, Field
+from chains.email_parser import EmailInfo
 from typing import Optional, List, TypedDict
-from utils import rag_utils
-
 
 class EmailInfo(BaseModel):
     """Data model for email extracted information."""
@@ -19,41 +18,31 @@ class EmailInfo(BaseModel):
 class EmailContent(BaseModel):
     email: List[EmailInfo]
 
-parser = JsonOutputParser(pydantic_object=EmailContent)
+parser = JsonOutputParser()
 
 prompt = PromptTemplate.from_template(
-    """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
-    You are an expert assistant that splits the given email thread into individual emails.
-    Return the extracted emails **ONLY** as a JSON list, where each email is a **separate object** with the following fields:
+"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+You are an expert assistant who processes email threads. \
+The input consists of several email strings. Some emails may be duplicates. Your task is:
+1. Split the email thread into individual emails using "***" as a delimiter to navigate the splits. The number of the output emails should be equal to the number of delimiters plus one.
+2. Identify and remove any duplicate emails in the list based on content mainting the chronological order.
+3. Return the unique emails **ONLY** as a JSON list, where each email is a **separate object** with the following fields:
 
-    - sender: The sender of the email. Store their name and email, if available, as a string in the format "Name <email@example.com>". If only a name is present, store it as "Name". 
-    - sent: The date sent in any of these formats: "Monday, February 6, 2023 3:58 PM" (full weekday, month, 12-hour format, and AM/PM) OR "Feb 6, 2023, at 3:58"
-    - to: A list of recipients' names and emails, if available. Store each entry as a string in the format "Name <email@example.com>" or "Name". The "To" field may contain multiple recipients separated by commas or semicolons.
-    - cc: A list of additional recipients' names and emails. Store each entry as a string in the format "Name <email@example.com>" or "Name". The "Cc" field may contain multiple recipients separated by commas or semicolons.
-    - subject: The subject of the email, stored as a string. Extract this after the "Subject:" field or "wrote:".
-    - body: The email body, stored without unnecessary whitespace.
+- sender: The sender of the email. Store their name and email, if available, as a string in the format "Name <email@example.com>". If only a name is present, store it as "Name". 
+- sent: The date sent in any of these formats: "Monday, February 6, 2023 3:58 PM" (full weekday, month, 12-hour format, and AM/PM) OR "Feb 6, 2023, at 3:58"
+- to: A list of recipients' names and emails, if available. Store each entry as a string in the format "Name <email@example.com>" or "Name". The "To" field may contain multiple recipients separated by commas or semicolons.
+- cc: A list of additional recipients' names and emails. Store each entry as a string in the format "Name <email@example.com>" or "Name". The "Cc" field may contain multiple recipients separated by commas or semicolons.
+- subject: The subject of the email, stored as a string. Extract this after the "Subject:" field or "wrote:".
+- body: The email body, stored without unnecessary whitespace.
 
-    Before extracting, consider this similar email format for guidance:
-    {retrieved_email_format}
+5. Ensure that the full body of the email is included until the next delimeter. 
+Process the following email thread:
+<|eot_id|><|start_header_id|>user<|end_header_id|>
+{emails}
+<|eot_id|><|start_header_id|>assistant<|end_header_id>
+"""
+)#.partial(format_instructions = parser.get_format_instructions())
 
-    Process the following email thread:
-    <|eot_id|><|start_header_id|>user<|end_header_id|>
-    {emails}
-    <|eot_id|><|start_header_id|>assistant<|end_header_id>
-    """
-)
-
-model = OllamaLLM(model="llama3.1", temperature=0,  num_gpu_layers=50, num_ctx=16384, num_predict=16384) #8192
+model = OllamaLLM(model="llama3.1", temperature=0,  num_gpu_layers=50, num_ctx=32768, num_predict=32768) #8192
 
 SPLIT_EMAILS_CHAIN = (prompt | model | parser)
-
-def split_and_extract_email_data(email_text: str)-> List[EmailInfo]:
-    """Split email threads and extract structured data."""
-
-    similar_format = rag_utils.retrieve_similar_email_format(email_text)
-
-    if similar_format:
-        prompt.partial(retrieved_email_format=similar_format)
-    
-    response = SPLIT_EMAILS_CHAIN({"emails": email_text})
-    return response

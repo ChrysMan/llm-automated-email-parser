@@ -19,7 +19,7 @@ def append_file(content, filename):
 
 def extract_msg_file(file_path) -> str:
     """ Returns the contents of the msg in a text format """
-    LOGGER.info("Extracting msg")
+    LOGGER.info("Extracting msg...")
     try:
         msg = extract_msg.Message(file_path)
     except Exception as e:
@@ -44,7 +44,7 @@ def clean_data(text: str) -> str:
     clean_text = re.sub(r"\n\s*\n+", "\n\n", clean_text)
     return clean_text
 
-def split_email_chain(text: str) -> list: 
+def split_email_thread(text: str) -> list: 
     """ Separates the emails using the word "From" or "On...wrote:" as an indicator to seperate. """
     seperator = re.compile(r"(?<=\n)\s*(From:|On .+ wrote:)", re.MULTILINE)
     email_parts = re.split(seperator, text)
@@ -54,7 +54,6 @@ def split_email_chain(text: str) -> list:
         if i % 2 ==1:
             formatted_parts.append(f"{part}")
         else:
-            clean_part = clean_data(part)
-            formatted_parts[-1] += f"{clean_part}"
+            formatted_parts[-1] += f"{part}"
     return formatted_parts
 
