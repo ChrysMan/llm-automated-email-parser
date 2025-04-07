@@ -3,7 +3,7 @@ import networkx as nx
 from networkx.readwrite import json_graph
 from typing import List
 from utils.logging_config import LOGGER
-from utils.graph_utils import extract_msg_file, write_file, append_file, clean_data, split_email_thread
+from utils.graph_utils import extract_msg_file, write_file, append_file, chunk_emails, clean_data, split_email_thread
 from chains.split_emails import SPLIT_EMAILS_CHAIN 
 
 def split_emails(file_path: str) -> List[str]:
@@ -12,16 +12,20 @@ def split_emails(file_path: str) -> List[str]:
 
     LOGGER.info("Splitting emails...")
     try:
+        raw_model_output = []
         splitted_emails = split_email_thread(cleaned_msg_content)
-        emails = "\n*** \n".join(splitted_emails)
-        write_file(emails, "emailSplit.txt")
-        raw_model_output = SPLIT_EMAILS_CHAIN.invoke({"emails": emails})
-        # raw_model_output = split_and_extract_email_data(msg)
-        
+        reversed_list = splitted_emails[::-1]
+        for chunk in chunk_emails(reversed_list, chunk_size=6):
+            # print(chunk)
+            chunk = "\n*** \n".join(chunk)
+            # print(chunk)
+            append_file(chunk, "emailSplit.txt")
+            raw_model_output.extend(SPLIT_EMAILS_CHAIN.invoke({"emails": chunk}))
+
         LOGGER.info("Splitted emails...")
         
         #print(email_list)
-        reversed_list = raw_model_output[::-1]
+        
     
     except Exception as e:
         LOGGER.error(f"Failed to split emails: {e}")
@@ -30,7 +34,7 @@ def split_emails(file_path: str) -> List[str]:
 
     LOGGER.info("Creating Graph...")
     try:
-        for n, email in enumerate(reversed_list):
+        for n, email in enumerate(raw_model_output):
             n+=1
             graph.add_node(n, email_node=email)
             if n > 1: 
@@ -39,7 +43,7 @@ def split_emails(file_path: str) -> List[str]:
         LOGGER.error(f"Failed to create graph: {e}")
 
 
-    return reversed_list
+    return raw_model_output
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:

@@ -54,6 +54,12 @@ def split_email_thread(text: str) -> list:
         if i % 2 ==1:
             formatted_parts.append(f"{part}")
         else:
+            part = part.replace("________________________________", "")
+            part = part.replace("--", "")
             formatted_parts[-1] += f"{part}"
     return formatted_parts
 
+def chunk_emails(email_list, chunk_size=10):
+    """ Yield successive chunks of n emails from the list. """
+    for i in range(0, len(email_list), chunk_size):
+        yield email_list[i:i + chunk_size]

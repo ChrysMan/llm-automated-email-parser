@@ -22,20 +22,22 @@ parser = JsonOutputParser()
 
 prompt = PromptTemplate.from_template(
 """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
-You are an expert assistant who processes email threads. \
+You are an expert assistant who processes email threads with precision and no loss of content.
 The input consists of several email strings. Some emails may be duplicates. Your task is:
-1. Split the email thread into individual emails using "***" as a delimiter to navigate the splits. The number of the output emails should be equal to the number of delimiters plus one.
+1. Split the email thread into individual emails using "***" as the only delimiter. Each "***" marks the end of one complete email.
 2. Identify and remove any duplicate emails in the list based on content mainting the chronological order.
 3. Return the unique emails **ONLY** as a JSON list, where each email is a **separate object** with the following fields:
 
 - sender: The sender of the email. Store their name and email, if available, as a string in the format "Name <email@example.com>". If only a name is present, store it as "Name". 
-- sent: The date sent in any of these formats: "Monday, February 6, 2023 3:58 PM" (full weekday, month, 12-hour format, and AM/PM) OR "Feb 6, 2023, at 3:58"
+- sent: Extract and include **only the date and time**. 
 - to: A list of recipients' names and emails, if available. Store each entry as a string in the format "Name <email@example.com>" or "Name". The "To" field may contain multiple recipients separated by commas or semicolons.
 - cc: A list of additional recipients' names and emails. Store each entry as a string in the format "Name <email@example.com>" or "Name". The "Cc" field may contain multiple recipients separated by commas or semicolons.
-- subject: The subject of the email, stored as a string. Extract this after the "Subject:" field or "wrote:".
-- body: The email body, stored without unnecessary whitespace.
+- subject: The subject of the email, stored as a string. Extract this after the "Subject:" field.
+- body:  Include the full content of the message starting from the line **after** "Subject:" or "wrote:", and continue **until the next delimiter**. Do not summarize or skip any content.
 
-5. Ensure that the full body of the email is included until the next delimeter. 
+4. Maintain the chronological order of the emails in the output.
+5. Do not hallucinate or add any information that is not present in the email thread.
+
 Process the following email thread:
 <|eot_id|><|start_header_id|>user<|end_header_id|>
 {emails}
@@ -43,6 +45,6 @@ Process the following email thread:
 """
 )#.partial(format_instructions = parser.get_format_instructions())
 
-model = OllamaLLM(model="llama3.1", temperature=0,  num_gpu_layers=50, num_ctx=32768, num_predict=32768) #8192
+model = OllamaLLM(model="llama3.1", temperature=0,  num_gpu_layers=50, num_ctx=8192, num_predict=8192) #8192
 
 SPLIT_EMAILS_CHAIN = (prompt | model | parser)
