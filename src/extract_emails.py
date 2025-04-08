@@ -62,6 +62,7 @@ if __name__ == "__main__":
 
     write_file("", output_path)
 
+    email_data = []
     for filename in os.listdir(dir_path):
         if filename.endswith(".msg"):
             file_path = os.path.join(dir_path, filename)
@@ -69,10 +70,11 @@ if __name__ == "__main__":
             try:
                 raw_msg_content = extract_msg_file(file_path)
                 
-                email_data = split_emails(file_path) 
-                with open(output_path, "a", encoding="utf-8") as file:
-                    json.dump(email_data, file, indent=4, ensure_ascii=False, default=str)
+                email_data.extend(split_emails(file_path)) 
             except Exception as e:
                 LOGGER.error(f"Processing {filename} failed: {e}")
+    
+    with open(output_path, "w", encoding="utf-8") as file:
+        json.dump(email_data, file, indent=4, ensure_ascii=False, default=str)
 
     
