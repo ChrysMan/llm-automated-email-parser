@@ -3,7 +3,7 @@ import networkx as nx
 from networkx.readwrite import json_graph
 from typing import List
 from utils.logging_config import LOGGER
-from utils.graph_utils import extract_msg_file, write_file, append_file, chunk_emails, clean_data, split_email_thread
+from utils.graph_utils import extract_msg_file, append_file, chunk_emails, clean_data, split_email_thread
 from chains.split_emails import SPLIT_EMAILS_CHAIN 
 
 def split_emails(file_path: str) -> List[str]:
@@ -16,16 +16,11 @@ def split_emails(file_path: str) -> List[str]:
         splitted_emails = split_email_thread(cleaned_msg_content)
         reversed_list = splitted_emails[::-1]
         for chunk in chunk_emails(reversed_list, chunk_size=6):
-            # print(chunk)
             chunk = "\n*** \n".join(chunk)
-            # print(chunk)
             append_file(chunk, "emailSplit.txt")
+    
             raw_model_output.extend(SPLIT_EMAILS_CHAIN.invoke({"emails": chunk}))
-
-        LOGGER.info("Splitted emails...")
-        
-        #print(email_list)
-        
+        LOGGER.info("Splitted emails...")        
     
     except Exception as e:
         LOGGER.error(f"Failed to split emails: {e}")
@@ -65,9 +60,7 @@ if __name__ == "__main__":
         if filename.endswith(".msg"):
             file_path = os.path.join(dir_path, filename)
             file_path = os.path.abspath(os.path.join(dir_path, filename))
-            try:
-                raw_msg_content = extract_msg_file(file_path)
-                
+            try:               
                 email_data.extend(split_emails(file_path)) 
             except Exception as e:
                 LOGGER.error(f"Processing {filename} failed: {e}")

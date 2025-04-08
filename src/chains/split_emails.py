@@ -4,7 +4,7 @@ from langchain.output_parsers import OutputFixingParser
 from langchain_ollama import OllamaLLM
 from pydantic import BaseModel, Field
 from chains.email_parser import EmailInfo
-from typing import Optional, List, TypedDict
+from typing import Optional, List
 
 class EmailInfo(BaseModel):
     """Data model for email extracted information."""
@@ -16,12 +16,8 @@ class EmailInfo(BaseModel):
     body: str = Field(..., description="The email body, excluding unnecessary whitespace.")
 
 
-class EmailContent(BaseModel):
-    email: List[EmailInfo]
-
-model = OllamaLLM(model="llama3.1", temperature=0,  num_gpu_layers=50, num_ctx=16384, num_predict=16384) #8192
-parser = JsonOutputParser(pydantic_object=EmailContent)
-safe_parser = OutputFixingParser.from_llm(parser=parser, llm=model)
+model = OllamaLLM(model="llama3.1", temperature=0, num_ctx=16384, num_predict=8192) #8192, 16384
+parser = JsonOutputParser(pydantic_object=EmailInfo, json_compatible=True)
 
 prompt = PromptTemplate.from_template(
 """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
@@ -33,14 +29,13 @@ The input consists of several email strings. Some emails may be duplicates. Your
 
 - sender: The sender of the email. Store their name and email, if available, as a string in the format "Name <email@example.com>". If only a name is present, store it as "Name". 
 - sent: Extract and include **only the date and time**. 
-- to: A list of recipients' names and emails, if available. Store each entry as a string in the format "Name <email@example.com>" or "Name". The "To" field may contain multiple recipients separated by commas or semicolons.
+- to: A list of recipients' names and emails, if available. Store each entry as a string in the format "Name <email@example.com>" or "Name". The "To" field may contain multiple recipients separated by commas or semicolons but is usually one.
 - cc: A list of additional recipients' names and emails. Store each entry as a string in the format "Name <email@example.com>" or "Name". The "Cc" field may contain multiple recipients separated by commas or semicolons.
 - subject: The subject of the email, stored as a string. Extract this after the "Subject:" field.
 - body:  Include the full content of the message starting from the line **after** "Subject:" or "wrote:", and continue **until the next delimiter**. Do not summarize or skip any content.
 
 4. Maintain the chronological order of the emails in the output.
 5. Do not hallucinate or add any information that is not present in the email thread.
-6. Output only a raw JSON array. No comments, no markdown, no code block. No natural language."
 
 Process the following email thread:
 <|eot_id|><|start_header_id|>user<|end_header_id|>
