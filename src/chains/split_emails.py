@@ -1,5 +1,6 @@
 from langchain_core.prompts import PromptTemplate
-from langchain_core.output_parsers import JsonOutputParser, CommaSeparatedListOutputParser
+from langchain_core.output_parsers import JsonOutputParser
+from langchain.output_parsers import OutputFixingParser
 from langchain_ollama import OllamaLLM
 from pydantic import BaseModel, Field
 from chains.email_parser import EmailInfo
@@ -18,7 +19,9 @@ class EmailInfo(BaseModel):
 class EmailContent(BaseModel):
     email: List[EmailInfo]
 
-parser = JsonOutputParser()
+model = OllamaLLM(model="llama3.1", temperature=0,  num_gpu_layers=50, num_ctx=16384, num_predict=16384) #8192
+parser = JsonOutputParser(pydantic_object=EmailContent)
+safe_parser = OutputFixingParser.from_llm(parser=parser, llm=model)
 
 prompt = PromptTemplate.from_template(
 """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
@@ -37,14 +40,13 @@ The input consists of several email strings. Some emails may be duplicates. Your
 
 4. Maintain the chronological order of the emails in the output.
 5. Do not hallucinate or add any information that is not present in the email thread.
+6. Output only a raw JSON array. No comments, no markdown, no code block. No natural language."
 
 Process the following email thread:
 <|eot_id|><|start_header_id|>user<|end_header_id|>
 {emails}
 <|eot_id|><|start_header_id|>assistant<|end_header_id>
 """
-)#.partial(format_instructions = parser.get_format_instructions())
-
-model = OllamaLLM(model="llama3.1", temperature=0,  num_gpu_layers=50, num_ctx=8192, num_predict=8192) #8192
+)
 
 SPLIT_EMAILS_CHAIN = (prompt | model | parser)

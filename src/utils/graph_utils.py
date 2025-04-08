@@ -56,6 +56,7 @@ def split_email_thread(text: str) -> list:
         else:
             part = part.replace("________________________________", "")
             part = part.replace("--", "")
+            part = part.replace('"\'', '"').replace('\'"', '"')
             formatted_parts[-1] += f"{part}"
     return formatted_parts
 

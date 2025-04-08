@@ -60,8 +60,6 @@ if __name__ == "__main__":
 
     output_path = os.path.join(dir_path, f"{folder_name}.json")
 
-    write_file("", output_path)
-
     email_data = []
     for filename in os.listdir(dir_path):
         if filename.endswith(".msg"):
