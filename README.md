@@ -46,7 +46,8 @@ ollama pull llama3.1
 ```
 ### Execute program:
 ```sh
-python app.py /path/to/your/data/directory
+python email_preprocessing_sync.py /path/to/your/data/directory      # Serial invocations of the model
+python email_preprocessing_async.py /path/to/your/data/directory     # Parallel invocations of the model
 ```
 #### Note: 
 /path/to/your/data/directory should be replaced with the actual path where your `.msg` files are stored.
