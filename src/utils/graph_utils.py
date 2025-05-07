@@ -40,12 +40,14 @@ Subject: {msg.subject}
 
 def clean_data(text: str) -> str:
     """ Cleans the text data by removing unnecessary spaces and new lines. """
-    clean_text = re.sub(r"^[ \t]+", "", text, flags=re.MULTILINE)
+    clean_text = re.sub(r"^[ \t]+", "", text, flags=re.MULTILINE) 
     clean_text = re.sub(r"\n\s*\n+", "\n\n", clean_text)
+    clean_text = re.sub(r"<image\d+\.(jpg|png)>", "", clean_text)
+    clean_text = clean_text.replace("________________________________", "").replace("--", "").replace('"\'', '"').replace('\'"', '"')
     return clean_text
 
 def split_email_thread(text: str) -> list: 
-    """ Separates the emails using the word "From" or "On...wrote:" as an indicator to seperate. """
+    """ Separates the emails using the word "From" or "On...wrote:" as an indicator to sepsrate. """
     seperator = re.compile(r"(?<=\n)\s*(From:|On .+ wrote:)", re.MULTILINE)
     email_parts = re.split(seperator, text)
     email_parts = [part.strip() for part in email_parts if part.strip()]
@@ -54,13 +56,10 @@ def split_email_thread(text: str) -> list:
         if i % 2 ==1:
             formatted_parts.append(f"{part}")
         else:
-            part = part.replace("________________________________", "")
-            part = part.replace("--", "")
-            part = part.replace('"\'', '"').replace('\'"', '"')
             formatted_parts[-1] += f"{part}"
     return formatted_parts
 
-def chunk_emails(email_list, chunk_size=10):
+def chunk_emails(email_list, chunk_size):
     """ Yield successive chunks of n emails from the list. """
     for i in range(0, len(email_list), chunk_size):
         yield email_list[i:i + chunk_size]
