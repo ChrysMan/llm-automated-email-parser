@@ -7,6 +7,7 @@
 - `ollama` installed ([Installation Guide](https://ollama.ai/))
 - `pip` installed (comes with Python)
 - `.msg` email files available for processing
+- LangSmith api key 
 
 
 
