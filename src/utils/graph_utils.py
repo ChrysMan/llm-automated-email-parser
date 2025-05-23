@@ -47,9 +47,9 @@ def clean_data(text: str) -> str:
     return clean_text
 
 def split_email_thread(text: str) -> list: 
-    """ Separates the emails using the word "From" or "On...wrote:" as an indicator to sepsrate. """
-    seperator = re.compile(r"(?<=\n)\s*(From:|On .+ wrote:)", re.MULTILINE)
-    email_parts = re.split(seperator, text)
+    """ Separates the emails using the word "From" or "On...wrote:" as an indicator to separate. """
+    separator = re.compile(r"(?<=\n)\s*(From:|On .+ wrote:)", re.MULTILINE)
+    email_parts = re.split(separator, text)
     email_parts = [part.strip() for part in email_parts if part.strip()]
     formatted_parts = []
     for i, part in enumerate(email_parts, 1):
