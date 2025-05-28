@@ -1,10 +1,10 @@
 import json, os, sys
 
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+#os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 #import networkx as nx
 from utils.logging_config import LOGGER
-from chains.extract_emails import split_and_extract_emails_acc
+from extract_emails_acc import split_and_extract_emails_acc
 from tools.build_graph import build_email_graph
 from time import time
 import torch

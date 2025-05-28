@@ -2,9 +2,12 @@
 import asyncio, os
 #os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 import torch 
+import math
 from accelerate import PartialState
 from accelerate.utils import gather_object
-from transformers import AutoTokenizer, AutoModelForCausalLM,pipeline, BitsAndBytesConfig
+from optimum.pipelines import pipeline
+from optimum.onnxruntime import ORTModelForCausalLM, ORTModelForQuestionAnswering
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from langchain_core.prompts import PromptTemplate
 from langchain_ollama import OllamaLLM
 from langchain_core.runnables import Runnable
@@ -15,7 +18,6 @@ from typing import Optional, List, Dict, Tuple
 from time import time
 from utils.logging_config import LOGGER
 from utils.graph_utils import extract_msg_file, clean_data, split_email_thread, write_file, append_file, chunk_emails
-
 
 
 langsmith_api_key = os.environ.get("LANGSMITH_API_KEY")
@@ -66,7 +68,7 @@ Process the following email thread:
 """
 )
 
-def load_model(use_accelerate: bool = False, model_id: str = "meta-llama/Llama-3.1-8B-Instruct") -> Tuple[AutoModelForCausalLM, AutoTokenizer, Optional[PartialState]]:
+def load_model(use_accelerate: bool = False, model_id: str = "/home/chryssida/meta-llama/Llama-3.1-8B-Instruct_onnx") -> Tuple[AutoModelForCausalLM, AutoTokenizer, Optional[PartialState]]:
     """
     Load the model and tokenizer for email extraction.
 
@@ -81,34 +83,44 @@ def load_model(use_accelerate: bool = False, model_id: str = "meta-llama/Llama-3
 
     if use_accelerate:
         distributed_state = PartialState()
+        torch.cuda.set_device(distributed_state.process_index)
 
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_use_double_quant=True,
             bnb_4bit_quant_type="nf4",
             bnb_4bit_compute_dtype=torch.float16)
-
+        
         model = AutoModelForCausalLM.from_pretrained(
             model_id,
             quantization_config=bnb_config,
             torch_dtype=torch.float16,
             low_cpu_mem_usage=True,
             #device_map="auto"
-            device_map={"": distributed_state.device}  # place model on local GPU
+            device_map={"": distributed_state.process_index}  # place model on local GPU
         )
 
         return model, tokenizer, distributed_state
     else:
+        '''
         model = AutoModelForCausalLM.from_pretrained(
             model_id,
             device_map="balanced",
             torch_dtype=torch.float16, 
             low_cpu_mem_usage=True
             )
+        '''
+        model = ORTModelForCausalLM.from_pretrained(
+            model_id
+            #provider="CUDAExecutionProvider"
+            #device_map="balanced",
+            #torch_dtype=torch.float16, 
+            #low_cpu_mem_usage=True
+            )
     
-    return model, tokenizer, None
+    return model, tokenizer
 
-def load_pipeline(model, tokenizer):
+def load_pipeline(model, tokenizer, state: PartialState):
     """
     Load the HuggingFace pipeline for text generation.
 
@@ -123,13 +135,16 @@ def load_pipeline(model, tokenizer):
         "text-generation",
         model=model,
         tokenizer=tokenizer,
-        max_new_tokens = 256,
-        return_full_text=False,
-        do_sample=False,
-        temperature=None,
-        top_k=None,
-        top_p=None
+        accelerator="ort",
+        #device_map=state.device if state else "auto",
+        max_new_tokens = 128
+        #return_full_text=False,
+        #do_sample=False,
+        #temperature=None,
+        #top_k=None,
+        #top_p=None
     )
+
 
     llm = HuggingFacePipeline(pipeline=pipe)
 
@@ -158,14 +173,9 @@ def split_and_extract_emails_sync(file_path: str) -> List[Dict]:
     """ 
 
     os.environ["LANGCHAIN_PROJECT"] = "extract_emails_sync"
-
-    # Get local rank from environment
-    local_rank = int(os.environ.get("LOCAL_RANK", 0))
-    torch.cuda.set_device(local_rank)
-
     
     model, tokenizer = load_model()
-    split_emails_chain = load_pipeline(model, tokenizer)
+    split_emails_chain = load_pipeline(model, tokenizer, None)
 
     raw_msg_content = extract_msg_file(file_path)
     cleaned_msg_content = clean_data(raw_msg_content)
@@ -174,7 +184,7 @@ def split_and_extract_emails_sync(file_path: str) -> List[Dict]:
     try:
         raw_model_output = []
         splitted_emails = split_email_thread(cleaned_msg_content)[::-1]
-        chunk_size = 5
+        chunk_size = 3
         for chunk in chunk_emails(splitted_emails, chunk_size=chunk_size):
             chunk = "\n*** \n".join(chunk)
             append_file(chunk, "emailSplit.txt")
@@ -206,7 +216,7 @@ async def split_and_extract_emails_async(file_path: str) -> List[Dict]:
 
     os.environ["LANGCHAIN_PROJECT"] = "extract_emails_async"
     model, tokenizer = load_model()
-    split_emails_chain = load_pipeline(model, tokenizer)
+    split_emails_chain = load_pipeline(model, tokenizer, None)
 
     raw_msg_content = extract_msg_file(file_path)
     cleaned_msg_content = clean_data(raw_msg_content)
@@ -231,8 +241,8 @@ async def split_and_extract_emails_async(file_path: str) -> List[Dict]:
     return raw_model_output
 
 def process_chunk(chunk: str, chunk_idx, chain: Runnable, distributed_state: PartialState) -> List[Dict]:
-    #chunk = "\n*** \n".join(chunk)
     tic = time()
+    
     result = chain.invoke({"emails": chunk}, config={"metadata": {"chunk_num": chunk_idx, "invocation_method": "distributed inference"}, "run_name": f"chunk_{chunk_idx}"})
     LOGGER.info(f"[GPU {distributed_state.process_index}] Chunk {chunk_idx} took {time() - tic:.2f}s")
     return result
@@ -264,9 +274,9 @@ def split_and_extract_emails_acc(file_path: str) -> List[Dict]:
 
     os.environ["LANGCHAIN_PROJECT"] = "extract_emails_acc"
     model, tokenizer, distributed_state = load_model(use_accelerate=True)
-    split_emails_chain = load_pipeline(model, tokenizer)
+    split_emails_chain = load_pipeline(model, tokenizer, distributed_state)
 
-    #accelerator.wait_for_everyone()
+    distributed_state.wait_for_everyone()
     #wait_for_all(distributed_state)
 
     raw_msg_content = extract_msg_file(file_path)
@@ -274,17 +284,19 @@ def split_and_extract_emails_acc(file_path: str) -> List[Dict]:
     LOGGER.info("Splitting emails...")
     try:
         splitted_emails = split_email_thread(cleaned_msg_content)[::-1]
-        chunk_size=5
-        #chunks = list(chunk_emails(splitted_emails, chunk_size=chunk_size))
-        partial_results = distributed_email_inference(splitted_emails, split_emails_chain, distributed_state)
+
+        chunk_size= math.ceil(len(splitted_emails) / 8)
+        chunks = list(chunk_emails(splitted_emails, chunk_size=chunk_size))
+        joined_chunks = ["\n***\n".join(chunk) for chunk in chunks]
+
+        partial_results = distributed_email_inference(joined_chunks, split_emails_chain, distributed_state)
 
         #accelerator.wait_for_everyone()
         #wait_for_all(accelerator)
+        distributed_state.wait_for_everyone()
 
         all_results = gather_object(partial_results)
         
-        distributed_state.wait_for_everyone()
-
         if distributed_state.is_main_process:
             flat_results = [item for sublist in all_results for item in sublist]
             LOGGER.info(f"Total output emails: {len(flat_results)}")
