@@ -1,22 +1,44 @@
 import json, sys, os
-#if "LOCAL_RANK" in os.environ:
-#    os.environ["CUDA_VISIBLE_DEVICES"] = os.environ["LOCAL_RANK"]
-
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+#os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 import torch 
-import math
 import torch.distributed as dist
+'''
+local_rank = int(os.environ.get("LOCAL_RANK", 0))
+
+dist.init_process_group(
+    backend="nccl",
+    init_method="env://",
+    rank=int(os.environ["RANK"]),
+    world_size=int(os.environ["WORLD_SIZE"]),
+    # NB: device_ids is only used by new PyTorch versions if you call barrier with it.
+)
+
+torch.cuda.set_device(local_rank)
+
+print(
+    f"PID {os.getpid()} | LOCAL_RANK={local_rank} | torch.cuda.current_device()={torch.cuda.current_device()} | CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES', 'unset')}",
+    flush=True
+)
+'''
+import math
 from time import time
-from accelerate import PartialState, Accelerator
-from accelerate.utils import gather_object
-from transformers import AutoTokenizer, AutoModelForCausalLM,pipeline, BitsAndBytesConfig
+from accelerate import Accelerator, PartialState, init_empty_weights, load_checkpoint_and_dispatch
+from accelerate.utils import gather_object, DeepSpeedPlugin
+from transformers import (
+    AutoTokenizer, 
+    AutoModelForCausalLM,
+    pipeline, 
+    BitsAndBytesConfig,
+    StoppingCriteria,
+    StoppingCriteriaList
+)
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_huggingface import HuggingFacePipeline
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Tuple
 from utils.logging_config import LOGGER
-from utils.graph_utils import extract_msg_file, clean_data, split_email_thread, write_file, append_file, chunk_emails
+from utils.graph_utils import extract_msg_file, clean_data, split_email_thread, chunk_emails
 
 langsmith_api_key = os.environ.get("LANGSMITH_API_KEY")
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
@@ -36,7 +58,8 @@ class EmailInfo(BaseModel):
 parser = JsonOutputParser(pydantic_object=EmailInfo, json_compatible=True)
 
 prompt_template = PromptTemplate.from_template(
-"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+"""<|begin_of_text|>
+<|start_header_id|>system<|end_header_id|>
 You are an expert assistant who processes email threads with precision and no loss of content.
 The input consists of several email strings. Some emails may be duplicates. Your task is:
 1. Split the email thread into individual emails using "***" as the only delimiter. Each "***" marks the end of one complete email.
@@ -56,65 +79,88 @@ The input consists of several email strings. Some emails may be duplicates. Your
 7. Output ONLY the raw JSON array. Do NOT include extra quotes, explanations, or any text.
 
 Process the following email thread:
-<|eot_id|><|start_header_id|>user<|end_header_id|>
+<|eot_id|>
+
+<|start_header_id|>user<|end_header_id|>
 {emails}
-<|eot_id|><|start_header_id|>assistant<|end_header_id>
+<|eot_id|>
+
+<|start_header_id|>assistant<|end_header_id>
 """
 )
 
-#local_rank = int(os.environ.get("LOCAL_RANK", 0))
+# Constants
+MODEL_NAME = "meta-llama/Llama-3.1-8B-Instruct"
+MAX_EMAILS_PER_PROMPT = 4  # Max emails per context batch
+MAX_SEQUENCE_LENGTH = 8192  # Llama 3 context limit
 
-#local_rank = 0
-#if "LOCAL_RANK" in os.environ:
-local_rank = int(os.environ.get("LOCAL_RANK", 0))
-#torch.cuda.set_device(0) 
+plugin = DeepSpeedPlugin(
+    hf_ds_config="ds_config.json"  # or a Python dict
+)
 
-torch.cuda.set_device(local_rank)
+state = Accelerator(mixed_precision="fp16", deepspeed_plugin=plugin)
 
-model_id = "meta-llama/Llama-3.1-8B-Instruct"
+rank = state.process_index       # 0 … num_processes–1
+world_size = state.num_processes # total number of processes
 
 bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_use_double_quant=True,
             bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.float16)
+            bnb_4bit_compute_dtype=torch.float16
+)
 
-state = PartialState()
+'''
+device_map = infer_auto_device_map(
+    AutoModelForCausalLM.from_pretrained(MODEL_NAME, torch_dtype=torch.bfloat16),
+    no_split_module_classes=["LlamaDecoderLayer"],
+    dtype=torch.bfloat16
+)'''
+
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+tokenizer.pad_token = tokenizer.eos_token
+tokenizer.padding_side = "left"
+tokenizer.model_max_length = MAX_SEQUENCE_LENGTH
 
 model = AutoModelForCausalLM.from_pretrained(
-            model_id,
-            trust_remote_code=True,
+            MODEL_NAME,
+            #device_map="auto",  #{"": state.process_index}, 
             quantization_config=bnb_config,
             torch_dtype=torch.float16,
             low_cpu_mem_usage=True
-            #device_map="auto"
-            #device_map={"": local_rank}  # place model on local GPU
+            #attn_implementation="sdpa",
+            #offload_folder="offload",  # Directory for CPU offloading
+            #max_memory={i: "12GiB" for i in range(8)}  # Reduce to 12GB/GPU
         )
 
-dist.barrier(device_ids=[local_rank])  # Ensure all processes synchronize before proceeding
-
-#model = model.to(torch.cuda.current_device())
-#model = model.to(state.device)
-
-tokenizer = AutoTokenizer.from_pretrained(model_id)
+model.config.max_length = tokenizer.model_max_length + 8192
+tokenizer.pad_token = tokenizer.eos_token
 tokenizer.pad_token_id = tokenizer.eos_token_id
+model.config.pad_token_id = tokenizer.eos_token_id
 
-
-
+#Stopping criteria for Llama 3 tokens
+class StopOnTokens(StoppingCriteria):
+    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor, **kwargs) -> bool:
+        stop_ids = [128001, 128009]  # <|end_of_text|> and <|eot_id|>
+        return any(stop_id in input_ids[0] for stop_id in stop_ids)
+            
 pipe = pipeline(
     "text-generation",
     model=model,
     tokenizer=tokenizer,
-    device=local_rank,  # Ensure HF pipeline sends inputs to correct device
-    max_new_tokens = 256,
+    #device=state.device,  # Ensure HF pipeline sends inputs to correct device
+    max_new_tokens = 8192,
     return_full_text=False,
     do_sample=False,
     temperature=None,
     top_k=None,
     top_p=None
+    #stopping_criteria=StoppingCriteriaList([StopOnTokens()]),
+    #eos_token_id=[tokenizer.eos_token_id, 128009]
 )
-#pipe.model.to(state.device)
-#pipe.model.to(state.device)
+
+#model, pipe = state.prepare(model, pipe)
+LOGGER.info(f"[Rank {rank}] model+pipeline ready—entering main loop")
 
 llm = HuggingFacePipeline(pipeline=pipe)
 
@@ -136,32 +182,28 @@ def split_and_extract_emails_acc(file_path: str) -> List[Dict]:
 
     os.environ["LANGCHAIN_PROJECT"] = "extract_emails_acc"
 
-    #state.wait_for_everyone()
-    #wait_for_all(state)
-
     raw_msg_content = extract_msg_file(file_path)
     cleaned_msg_content = clean_data(raw_msg_content)
     LOGGER.info("Splitting emails...")
     try:
         splitted_emails = split_email_thread(cleaned_msg_content)[::-1]
 
-        chunk_size= math.ceil(len(splitted_emails) / 8)
-        chunks = list(chunk_emails(splitted_emails, chunk_size=chunk_size))
+        chunks = list(chunk_emails(splitted_emails, 3)) #math.ceil(len(splitted_emails) / state.num_processes)))
         joined_chunks = ["\n***\n".join(chunk) for chunk in chunks]
 
-        
+        results = []
         with state.split_between_processes(joined_chunks) as local_chunks:
-            results = []
 
             for idx, chunk in enumerate(local_chunks):
                 result = SPLIT_EMAILS_CHAIN.invoke({"emails": chunk}, config={"metadata": {"chunk_num": idx, "invocation_method": "distributed inference"}, "run_name": f"chunk_{idx}"})
                 results.extend(result)
 
-        #accelerator.wait_for_everyone()
-        #wait_for_all(accelerator)
-        state.wait_for_everyone()
+        #state.wait_for_everyone()
+        gloo_group = dist.new_group(backend="gloo")  # Use Gloo for CPU communication
 
-        all_results = gather_object(results)
+        dist.barrier(backend="gloo")  # Ensure all processes are synchronized before gathering results
+        all_results = gather_object(results, group=gloo_group)
+        dist.barrier(backend="gloo")
         
         if state.is_main_process:
             flat_results = [item for sublist in all_results for item in sublist]
@@ -169,6 +211,9 @@ def split_and_extract_emails_acc(file_path: str) -> List[Dict]:
             return flat_results
         else:
             return []
+        '''
+        state.wait_for_everyone()
+        return results'''
     
     except Exception as e:
         LOGGER.error(f"Failed to split emails: {e}")
@@ -202,13 +247,40 @@ if __name__ == "__main__":
             try:
 
                 tic = time()
-                data = split_and_extract_emails_acc(file_path)
-                LOGGER.info(f"Time taken to process {filename}: {time() - tic} seconds")
+                
+                local_data = split_and_extract_emails_acc(file_path)
+                LOGGER.info(f"[Rank {rank}] Processed {filename} in {time() - tic:.2f}s")
+                email_data.extend(local_data) 
+                '''
+                # Write *only this rank's* results for that file
+                out_fname = os.path.join(dir_path, f"{folder_name}_rank{rank}.json")
+                with open(out_fname, "w", encoding="utf-8") as f:
+                    json.dump(local_data, f, indent=4, ensure_ascii=False)
 
-                #graph = build_email_graph(graph, data, filename)
-                email_data.extend(data) 
             except Exception as e:
-                LOGGER.error(f"Processing {filename} failed: {e}")
+                LOGGER.error(f"[Rank {rank}] Error processing {filename}: {e}")
+
+        # 2) Barrier so every rank has finished writing its partial files
+        state.wait_for_everyone()
+
+        # 3) Only the main rank reads & merges them
+        if state.is_main_process:
+            combined = []
+            for r in range(world_size):
+                partial_path = os.path.join(dir_path, f"{folder_name}_rank{r}.json")
+                if os.path.exists(partial_path):
+                    with open(partial_path, "r", encoding="utf-8") as f:
+                        combined.extend(json.load(f))
+
+            # 4) Write the final merged output
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(combined, f, indent=4, ensure_ascii=False)
+        '''
+            except Exception as e:
+                LOGGER.error(f"Error processing {filename}: {e}")
+            #LOGGER.info(f"[Rank 0] Wrote combined output to {output_path}")
+
+    
     
     with open(output_path, "w", encoding="utf-8") as file:
         json.dump(email_data, file, indent=4, ensure_ascii=False, default=str)

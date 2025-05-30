@@ -5,11 +5,8 @@ import torch
 import math
 from accelerate import PartialState
 from accelerate.utils import gather_object
-from optimum.pipelines import pipeline
-from optimum.onnxruntime import ORTModelForCausalLM, ORTModelForQuestionAnswering
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, pipeline
 from langchain_core.prompts import PromptTemplate
-from langchain_ollama import OllamaLLM
 from langchain_core.runnables import Runnable
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_huggingface import HuggingFacePipeline
@@ -68,7 +65,7 @@ Process the following email thread:
 """
 )
 
-def load_model(use_accelerate: bool = False, model_id: str = "/home/chryssida/meta-llama/Llama-3.1-8B-Instruct_onnx") -> Tuple[AutoModelForCausalLM, AutoTokenizer, Optional[PartialState]]:
+def load_model(use_accelerate: bool = False, model_id: str = "meta-llama/Llama-3.1-8B-Instruct") -> Tuple[AutoModelForCausalLM, AutoTokenizer, Optional[PartialState]]:
     """
     Load the model and tokenizer for email extraction.
 
@@ -81,15 +78,15 @@ def load_model(use_accelerate: bool = False, model_id: str = "/home/chryssida/me
     """
     tokenizer = AutoTokenizer.from_pretrained(model_id)
 
-    if use_accelerate:
-        distributed_state = PartialState()
-        torch.cuda.set_device(distributed_state.process_index)
-
-        bnb_config = BitsAndBytesConfig(
+    bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_use_double_quant=True,
             bnb_4bit_quant_type="nf4",
             bnb_4bit_compute_dtype=torch.float16)
+
+    if use_accelerate:
+        distributed_state = PartialState()
+        torch.cuda.set_device(distributed_state.process_index)
         
         model = AutoModelForCausalLM.from_pretrained(
             model_id,
@@ -100,27 +97,30 @@ def load_model(use_accelerate: bool = False, model_id: str = "/home/chryssida/me
             device_map={"": distributed_state.process_index}  # place model on local GPU
         )
 
+        tokenizer.pad_token = tokenizer.eos_token
+        tokenizer.pad_token_id = tokenizer.eos_token_id
+        model.config.pad_token_id = tokenizer.eos_token_id
+
         return model, tokenizer, distributed_state
     else:
-        '''
         model = AutoModelForCausalLM.from_pretrained(
             model_id,
-            device_map="balanced",
+            device_map={"": 0},
+            attn_implementation="sdpa",
+            quantization_config=bnb_config,
             torch_dtype=torch.float16, 
-            low_cpu_mem_usage=True
+            low_cpu_mem_usage=False
             )
-        '''
-        model = ORTModelForCausalLM.from_pretrained(
-            model_id
-            #provider="CUDAExecutionProvider"
-            #device_map="balanced",
-            #torch_dtype=torch.float16, 
-            #low_cpu_mem_usage=True
-            )
+        
+        model.config.max_length = tokenizer.model_max_length + 4096
+        tokenizer.pad_token = tokenizer.eos_token
+        tokenizer.pad_token_id = tokenizer.eos_token_id
+        model.config.pad_token_id = tokenizer.eos_token_id
+        
     
     return model, tokenizer
 
-def load_pipeline(model, tokenizer, state: PartialState):
+def load_pipeline(model, tokenizer):
     """
     Load the HuggingFace pipeline for text generation.
 
@@ -135,14 +135,14 @@ def load_pipeline(model, tokenizer, state: PartialState):
         "text-generation",
         model=model,
         tokenizer=tokenizer,
-        accelerator="ort",
+        #accelerator="ort",
         #device_map=state.device if state else "auto",
-        max_new_tokens = 128
-        #return_full_text=False,
-        #do_sample=False,
-        #temperature=None,
-        #top_k=None,
-        #top_p=None
+        return_full_text=False,
+        max_new_tokens= 4096,
+        do_sample=False,
+        temperature=None,
+        top_k=None,
+        top_p=None
     )
 
 
@@ -175,19 +175,19 @@ def split_and_extract_emails_sync(file_path: str) -> List[Dict]:
     os.environ["LANGCHAIN_PROJECT"] = "extract_emails_sync"
     
     model, tokenizer = load_model()
-    split_emails_chain = load_pipeline(model, tokenizer, None)
+    split_emails_chain = load_pipeline(model, tokenizer)
 
     raw_msg_content = extract_msg_file(file_path)
     cleaned_msg_content = clean_data(raw_msg_content)
-    write_file(cleaned_msg_content, "clean1.txt")
+    #write_file(cleaned_msg_content, "clean1.txt")
     LOGGER.info("Splitting emails...")
     try:
         raw_model_output = []
         splitted_emails = split_email_thread(cleaned_msg_content)[::-1]
-        chunk_size = 3
+        chunk_size = 5
         for chunk in chunk_emails(splitted_emails, chunk_size=chunk_size):
             chunk = "\n*** \n".join(chunk)
-            append_file(chunk, "emailSplit.txt")
+            #append_file(chunk, "emailSplit.txt")
 
             # Invoke the model with the chunk
             tic = time()
@@ -216,7 +216,7 @@ async def split_and_extract_emails_async(file_path: str) -> List[Dict]:
 
     os.environ["LANGCHAIN_PROJECT"] = "extract_emails_async"
     model, tokenizer = load_model()
-    split_emails_chain = load_pipeline(model, tokenizer, None)
+    split_emails_chain = load_pipeline(model, tokenizer)
 
     raw_msg_content = extract_msg_file(file_path)
     cleaned_msg_content = clean_data(raw_msg_content)
@@ -274,7 +274,7 @@ def split_and_extract_emails_acc(file_path: str) -> List[Dict]:
 
     os.environ["LANGCHAIN_PROJECT"] = "extract_emails_acc"
     model, tokenizer, distributed_state = load_model(use_accelerate=True)
-    split_emails_chain = load_pipeline(model, tokenizer, distributed_state)
+    split_emails_chain = load_pipeline(model, tokenizer)
 
     distributed_state.wait_for_everyone()
     #wait_for_all(distributed_state)

@@ -89,91 +89,100 @@ Process the following email thread:
 """
 )
 
+#local_rank = int(os.environ.get("LOCAL_RANK", 0))
+#torch.cuda.set_device(local_rank)
+
 # Initialize distributed state
 state = PartialState()
 
-if state.distributed_type == state.distributed_type.MULTI_GPU:
-    # Initialize NCCL explicitly
-    if not dist.is_initialized():
-        dist.init_process_group(
-            backend="nccl",
-            init_method="env://",
-            rank=int(os.environ.get("RANK", "0")),
-            world_size=int(os.environ.get("WORLD_SIZE", "1")),
-            timeout=timedelta(seconds=30)
+class ContextAwareBatchProcessor:
+    def __init__(self, max_batch_size: int = 1):
+        """
+        max_batch_size: How many email batches to process simultaneously on one GPU
+        """
+        self.max_batch_size = max_batch_size
+        self._init_model()
+
+    def _init_model(self):
+        """Initialize model with optimized settings for long sequences"""
+        quantization_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=torch.float16,
+            bnb_4bit_quant_type="nf4"
+            #bnb_4bit_use_double_quant=True,
+            #llm_int8_skip_modules=["lm_head"],
+            #bnb_4bit_quant_storage=torch.uint8,
+            #load_in_4bit_skip_modules=["lm_head"] 
+
         )
-    
-    # Set device explicitly
-    torch.cuda.set_device(int(os.environ.get("LOCAL_RANK", "0")))
-    #dist.barrier(device_ids=[state.device.index])
+        
+        '''
+        device_map = infer_auto_device_map(
+            model=meta_model,
+            no_split_module_classes=["LlamaDecoderLayer"],
+            max_memory={i: "14GiB" for i in range(8)},
+            dtype=torch.bfloat16,
+            offload_buffers=False,  # Keep buffers on GPU
+            fallback_allocation=True  # Allow overflow to CPU if needed
+        )
+        '''
 
-#Stopping criteria for Llama 3 tokens
-class StopOnTokens(StoppingCriteria):
-    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor, **kwargs) -> bool:
-        stop_ids = [128001, 128009]  # <|end_of_text|> and <|eot_id|>
-        return any(stop_id in input_ids[0] for stop_id in stop_ids)
+        self.tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+        self.tokenizer.pad_token = self.tokenizer.eos_token
+        self.tokenizer.padding_side = "left"
+        self.tokenizer.model_max_length = MAX_SEQUENCE_LENGTH
+        
+        local_rank = int(os.environ.get("LOCAL_RANK", 0))
+        torch.cuda.set_device(local_rank)
 
-# Model and pipeline setup
-bnb_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_use_double_quant=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.float16,  # Use float16 instead of bfloat16
-    llm_int8_skip_modules=["lm_head"],
-    bnb_4bit_quant_storage=torch.uint8,
-    load_in_4bit_skip_modules=["lm_head"]  # Skip quantizing output layer
-)
+        self.model = AutoModelForCausalLM.from_pretrained(
+            MODEL_NAME,
+            device_map={"": local_rank},
+            quantization_config=quantization_config,
+            torch_dtype=torch.float16,
+            #attn_implementation="sdpa",
+            low_cpu_mem_usage=True,
+            offload_state_dict=True
+            #offload_folder="offload",  # Directory for CPU offloading
+            #max_memory={i: "12GiB" for i in range(8)}  # Reduce to 12GB/GPU
+        )
 
-'''
-device_map = infer_auto_device_map(
-    model=meta_model,
-    no_split_module_classes=["LlamaDecoderLayer"],
-    max_memory={i: "14GiB" for i in range(8)},
-    dtype=torch.bfloat16,
-    offload_buffers=False,  # Keep buffers on GPU
-    fallback_allocation=True  # Allow overflow to CPU if needed
-)
-'''
-model = AutoModelForCausalLM.from_pretrained(
-    MODEL_NAME,
-    quantization_config=bnb_config,
-    torch_dtype=torch.float16,
-    device_map={"": state.process_index},  # Let accelerate handle distribution
-    low_cpu_mem_usage=True,
-    offload_folder="offload",  # Directory for CPU offloading
-    offload_state_dict=True,   # Critical for P100s
-    max_memory={i: "12GiB" for i in range(8)}  # Reduce to 12GB/GPU
-    #attn_implementation="sdpa"  # For faster processing #flash_attention_2
-)
+        
+        '''
+        model.config.use_cache = False
+        model.eval() 
+        model.gradient_checkpointing_enable()
+        '''
 
-    
+        #Stopping criteria for Llama 3 tokens
+        class StopOnTokens(StoppingCriteria):
+            def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor, **kwargs) -> bool:
+                stop_ids = [128001, 128009]  # <|end_of_text|> and <|eot_id|>
+                return any(stop_id in input_ids[0] for stop_id in stop_ids)
 
-model.config.use_cache = False
-model.eval() 
-model.gradient_checkpointing_enable()
+        pipe = pipeline(
+            "text-generation",
+            model=self.model,
+            tokenizer=self.tokenizer,
+            max_new_tokens=256,  # Increased for longer responses
+            batch_size=self.max_batch_size,
+            return_full_text=False,
+            do_sample=False,
+            temperature=None,
+            top_k=None,
+            top_p=None,
+            stopping_criteria=StoppingCriteriaList([StopOnTokens()]),
+            eos_token_id=[self.tokenizer.eos_token_id, 128009]
+        )
 
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-tokenizer.pad_token_id = tokenizer.eos_token_id
+        llm = HuggingFacePipeline(pipeline=pipe)
+        self.chain = SPLIT_EMAILS_CHAIN = (prompt_template | llm | parser)
 
-pipe = pipeline(
-    "text-generation",
-    model=model,
-    tokenizer=tokenizer,
-    max_new_tokens=256,  # Increased for longer responses
-    return_full_text=False,
-    do_sample=False,
-    temperature=None,
-    top_k=None,
-    top_p=None,
-    stopping_criteria=StoppingCriteriaList([StopOnTokens()]),
-    eos_token_id=[tokenizer.eos_token_id, 128009]
-)
-
-llm = HuggingFacePipeline(pipeline=pipe)
-SPLIT_EMAILS_CHAIN = (prompt_template | llm | parser)
+    def invoke(self, *args, **kwargs):
+        return self.chain.invoke(*args, **kwargs)
 
 def distribute_email_processing(email_batches: List[str]) -> List[dict]:
-    """Distribute email batches across GPUs with dynamic scaling"""
+    '''Distribute email batches across GPUs with dynamic scaling'''
     # Calculate resource allocation
     total_batches = len(email_batches)
     gpus_available = state.num_processes
@@ -191,7 +200,8 @@ def distribute_email_processing(email_batches: List[str]) -> List[dict]:
     results = []
     for batch in local_batches:
         try:
-            result = SPLIT_EMAILS_CHAIN.invoke(
+            processor = ContextAwareBatchProcessor(max_batch_size=MAX_EMAILS_PER_PROMPT)
+            result = processor.invoke(
                 {"emails": batch},
                 config={
                     "metadata": {"batch_size": len(batch.split("***"))},
@@ -241,7 +251,6 @@ def split_and_extract_emails_acc(file_path: str) -> List[Dict]:
     except Exception as e:
         LOGGER.error(f"Failed to split emails: {e}")
         return []
-
 
 if __name__ == "__main__":
     if torch.cuda.is_available():
