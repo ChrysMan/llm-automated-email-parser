@@ -6,6 +6,7 @@ from packaging.version import Version
 from vllm import LLM, SamplingParams
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.exceptions import OutputParserException
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 from utils.logging_config import LOGGER
@@ -21,7 +22,7 @@ if not langsmith_api_key:
     LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
     
 
-sampling_params = SamplingParams(temperature=0, top_p=None, max_tokens=8192)
+sampling_params = SamplingParams(temperature=0, max_tokens=8192)
 
 # Set tensor parallelism per instance.
 tensor_parallel_size = 1
@@ -74,12 +75,21 @@ Process the following email thread:
 
 class LLMPredictor:
 
-    def __init__(self, model_tag:str):
+    def __init__(self, model_tag:str, tensor_parallel_size: int):
         # Create an LLM.
         self.llm = LLM(model=model_tag,
-                       tensor_parallel_size=tensor_parallel_size)
+                       tensor_parallel_size=tensor_parallel_size, 
+                       dtype = 'float16',
+                       gpu_memory_utilization=0.8,
+                       max_seq_len_to_capture=4096,
+                       max_model_len=8192,
+                       cpu_offload_gb=6,
+                       enforce_eager=True
+            )
+        
         self.parser = parser
-        self.SPLIT_EMAILS_CHAIN = (prompt_template | self.llm | parser)
+
+        #self.SPLIT_EMAILS_CHAIN = (prompt_template | unwrap_vllm | parser)
 
     def __call__(self, batch: List[str]) -> List[Dict]:
         ''' Generate texts from the prompts.
@@ -88,7 +98,15 @@ class LLMPredictor:
         
         # One big "joined prompt" into the chain to retain information between emails.
         joined_chunks = ["\n***\n".join(batch)]
-        generated_text = self.SPLIT_EMAILS_CHAIN.invoke({"emails": joined_chunks}, config={"metadata": {"chunk_num": len[batch], "invocation_method": "distributed inference with vllm"}, "run_name": f"actor_{ray.get_runtime_context().get_actor_id()}"})
+        outputs = self.llm.generate(joined_chunks, sampling_params)
+        raw = outputs[0].outputs[0].text
+        try:
+            generated_text: List[Dict] = self.parser.parse(raw)
+        except OutputParserException as e:
+            LOGGER.error(f"JSON parsing failed for chunk of size {len(batch)}: {e}")
+            raise
+
+        #generated_text = self.SPLIT_EMAILS_CHAIN.invoke({"emails": joined_chunks}, config={"metadata": {"chunk_num": len(batch), "invocation_method": "distributed inference with vllm"}, "run_name": f"actor_{ray.get_runtime_context().get_actor_id()}"})
         
         '''
         # Batch mode with a list of emails
@@ -112,7 +130,7 @@ class RayLLMActor:
         return self.predictor(batch_prompts)
 
 
-def split_emails(file_path: str, actors: RayLLMActor) -> List[str]:
+def split_emails(file_path: str, actors: RayLLMActor) -> List[Dict]:
 
     os.environ["LANGCHAIN_PROJECT"] = "extract_emails_vllm"
 
@@ -120,12 +138,13 @@ def split_emails(file_path: str, actors: RayLLMActor) -> List[str]:
     cleaned_msg_content = clean_data(raw_msg_content)
     append_file(cleaned_msg_content, "clean.txt")
     LOGGER.info("Splitting emails...")
+
+    gathered_emails: List[Dict] = []
+
     try:
-        chunk_size= math.ceil(len(splitted_emails) / num_instances)
-
         splitted_emails: List[str] = split_email_thread(cleaned_msg_content)[::-1]
-
-        chunks: List[List[str]] = (chunk_emails(splitted_emails, chunk_size=chunk_size))
+        chunk_size= math.ceil(len(splitted_emails) / num_instances)
+        chunks: List[List[str]] = list((chunk_emails(splitted_emails, chunk_size=chunk_size)))
 
         futures = []
         for idx, batch in enumerate(chunks):
@@ -135,14 +154,15 @@ def split_emails(file_path: str, actors: RayLLMActor) -> List[str]:
 
         batch_results: List[List[Dict]] = ray.get(futures)
 
-        gathered_emails: List[Dict] = []
-
         for sublist in batch_results:
             gathered_emails.extend(sublist)
-        LOGGER.info("Splitted and extracted emails...")        
+        LOGGER.info("Splitted and extracted emails...")      
+
+        return gathered_emails  
     
     except Exception as e:
         LOGGER.error(f"Failed to split emails: {e}")
+
 
     return gathered_emails
 
@@ -168,21 +188,28 @@ if __name__ == "__main__":
     
     email_data = []
     graph = nx.DiGraph()
-    for filename in os.listdir(dir_path):
-        if filename.endswith(".msg"):
-            file_path = os.path.abspath(os.path.join(dir_path, filename))
-            try:               
-                result = split_emails(file_path, actors)
-                #graph = add_to_graph(graph, result, filename)
-                email_data.extend(result) 
-            except Exception as e:
-                LOGGER.error(f"Processing {filename} failed: {e}")
-    
-    with open(output_path, "w", encoding="utf-8") as file:
-        json.dump(email_data, file, indent=4, ensure_ascii=False, default=str)
-    
 
-    ray.shutdown()
+    try: 
+
+        for filename in os.listdir(dir_path):
+            if filename.endswith(".msg"):
+                file_path = os.path.abspath(os.path.join(dir_path, filename))
+                try:               
+                    result = split_emails(file_path, actors)
+                    #graph = add_to_graph(graph, result, filename)
+                    email_data.extend(result) 
+                except Exception as e:
+                    LOGGER.error(f"Processing {filename} failed: {e}")
+        
+        with open(output_path, "w", encoding="utf-8") as file:
+            json.dump(email_data, file, indent=4, ensure_ascii=False, default=str)
+   
+    except Exception as main_exc:
+        LOGGER.error(f"Fatal error in main: {main_exc}")
+
+    finally:
+        ray.shutdown()
+    
 '''
     plt.figure(figsize=(12, 10))
     pos = nx.kamada_kawai_layout(graph)
