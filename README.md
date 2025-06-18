@@ -49,7 +49,7 @@ ollama pull llama3.1
 ```sh
 python email_preprocessing_sync.py /path/to/your/data/directory                                     # Serial invocations of the model
 python email_preprocessing_async.py /path/to/your/data/directory                                    # Parallel invocations of the model
-python accelerate launch --num_processes=8 email_preprocessing_acc.py /path/to/your/data/directory  # Distributed inference
+python  email_preprocessing_vllm.py /path/to/your/data/directory  # Distributed inference using vllm
 ```
 #### Note: 
 /path/to/your/data/directory should be replaced with the actual path where your `.msg` files are stored.
