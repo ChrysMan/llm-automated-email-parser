@@ -4,13 +4,14 @@ import ray
 import math
 from packaging.version import Version
 from vllm import LLM, SamplingParams
+from langsmith import trace  
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.exceptions import OutputParserException
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 from utils.logging_config import LOGGER
-from utils.graph_utils import extract_msg_file, append_file, chunk_emails, clean_data, split_email_thread
+from utils.graph_utils import split_into_n_chunks, extract_msg_file, append_file, chunk_emails, clean_data, split_email_thread
 
 assert Version(ray.__version__) >= Version(
     "2.22.0"), "Ray version must be at least 2.22.0"
@@ -18,6 +19,7 @@ assert Version(ray.__version__) >= Version(
 langsmith_api_key = os.environ.get("LANGSMITH_API_KEY")
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
 os.environ["LANGCHAIN_ENDPOINT"]="https://api.smith.langchain.com"
+#os.environ["LANGCHAIN_PROJECT"] = "extract_emails_vllm"
 if not langsmith_api_key:
     LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
     
@@ -91,17 +93,40 @@ class LLMPredictor:
 
         #self.SPLIT_EMAILS_CHAIN = (prompt_template | unwrap_vllm | parser)
 
-    def __call__(self, batch: List[str]) -> List[Dict]:
+    def __call__(self, batch: List[str]): #-> List[str]:
         ''' Generate texts from the prompts.
          The output is a list of RequestOutput objects that contain the prompt,
          generated text, and other information.'''
         
         # One big "joined prompt" into the chain to retain information between emails.
-        joined_chunks = ["\n***\n".join(batch)]
-        outputs = self.llm.generate(joined_chunks, sampling_params)
-        raw = outputs[0].outputs[0].text
+        sampling_params = SamplingParams(temperature=0, max_tokens=8192)
+        
+        joined_chunks = "\n***\n".join(batch)
+        prompt = prompt_template.format(emails=joined_chunks)
+
+        with trace(
+            name=f"actor_{ray.get_runtime_context().get_actor_id()}",
+            project_name="extract_emails_vllm",
+            inputs={"prompt": prompt},
+            metadata={
+                "chunk_num": len(batch),
+                "invocation_method": "distributed inference with vllm"
+            },
+        )as run:                                      
+            outputs_obj = self.llm.generate([prompt], sampling_params)
+            raw = outputs_obj[0].outputs[0].text
+            run.end(outputs={"raw": raw})                    
+        
+        """
+            generated_text: List[str] = []
         try:
-            generated_text: List[Dict] = self.parser.parse(raw)
+            for output in outputs:
+                parsed_output = parser.parse(output.outputs[0].text)
+                generated_text.append(parsed_output)
+        
+        """
+        try:
+            generated_text= self.parser.parse(raw) #List[str] = self.parser.parse(raw)
         except OutputParserException as e:
             LOGGER.error(f"JSON parsing failed for chunk of size {len(batch)}: {e}")
             raise
@@ -132,8 +157,6 @@ class RayLLMActor:
 
 def split_emails(file_path: str, actors: RayLLMActor) -> List[Dict]:
 
-    os.environ["LANGCHAIN_PROJECT"] = "extract_emails_vllm"
-
     raw_msg_content = extract_msg_file(file_path)
     cleaned_msg_content = clean_data(raw_msg_content)
     append_file(cleaned_msg_content, "clean.txt")
@@ -142,9 +165,13 @@ def split_emails(file_path: str, actors: RayLLMActor) -> List[Dict]:
     gathered_emails: List[Dict] = []
 
     try:
+
+        #  Implement logic for larger number of emails.
         splitted_emails: List[str] = split_email_thread(cleaned_msg_content)[::-1]
-        chunk_size= math.ceil(len(splitted_emails) / num_instances)
-        chunks: List[List[str]] = list((chunk_emails(splitted_emails, chunk_size=chunk_size)))
+        LOGGER.info(f"Splitted emails: {len(splitted_emails)}")
+        #chunk_size= math.ceil(len(splitted_emails) / num_instances)
+        #LOGGER.info(f"Chunk size: {chunk_size}")
+        chunks: List[List[str]] = split_into_n_chunks(splitted_emails, num_instances)
 
         futures = []
         for idx, batch in enumerate(chunks):
@@ -188,6 +215,7 @@ if __name__ == "__main__":
     
     email_data = []
     graph = nx.DiGraph()
+
 
     try: 
 

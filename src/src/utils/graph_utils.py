@@ -1,5 +1,6 @@
 import extract_msg, re
 from utils.logging_config import LOGGER
+from typing import List
 
 def write_file(content, filename):
     """ Writes the given content to the given file to the local directory """
@@ -63,3 +64,21 @@ def chunk_emails(email_list, chunk_size):
     """ Yield successive chunks of n emails from the list. """
     for i in range(0, len(email_list), chunk_size):
         yield email_list[i:i + chunk_size]
+
+def split_into_n_chunks(items: List[str], n: int) -> List[List[str]]:
+    """
+    Split *items* into exactly *n* contiguous chunks.
+    - Chunks differ in size by at most 1.
+    - If len(items) < n, the extra chunks are empty lists.
+    """
+    if n <= 0:
+        raise ValueError("n must be a positive integer")
+
+    k, m = divmod(len(items), n)   # k = base size, m = first m chunks get +1
+    chunks = []
+    idx = 0
+    for i in range(n):
+        next_idx = idx + k + (1 if i < m else 0)
+        chunks.append(items[idx:next_idx])
+        idx = next_idx
+    return chunks
