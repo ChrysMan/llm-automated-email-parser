@@ -2,6 +2,7 @@ import json, os, sys
 import networkx as nx
 import ray
 import math
+from ray.util.actor_pool import ActorPool
 from packaging.version import Version
 from vllm import LLM, SamplingParams
 from langsmith import trace  
@@ -11,7 +12,7 @@ from langchain_core.exceptions import OutputParserException
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 from utils.logging_config import LOGGER
-from utils.graph_utils import split_into_n_chunks, extract_msg_file, append_file, chunk_emails, clean_data, split_email_thread
+from utils.graph_utils import split_for_gpus_dynamic, extract_msg_file, append_file, chunk_emails, clean_data, split_email_thread
 
 assert Version(ray.__version__) >= Version(
     "2.22.0"), "Ray version must be at least 2.22.0"
@@ -23,8 +24,6 @@ os.environ["LANGCHAIN_ENDPOINT"]="https://api.smith.langchain.com"
 if not langsmith_api_key:
     LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
     
-
-sampling_params = SamplingParams(temperature=0, max_tokens=8192)
 
 # Set tensor parallelism per instance.
 tensor_parallel_size = 1
@@ -82,67 +81,53 @@ class LLMPredictor:
         self.llm = LLM(model=model_tag,
                        tensor_parallel_size=tensor_parallel_size, 
                        dtype = 'float16',
-                       gpu_memory_utilization=0.8,
+                       gpu_memory_utilization=0.95,
                        max_seq_len_to_capture=4096,
                        max_model_len=8192,
-                       cpu_offload_gb=6,
+                       cpu_offload_gb=3,
                        enforce_eager=True
             )
         
         self.parser = parser
+        self.sampling_params = SamplingParams(temperature=0, max_tokens=3500)
 
-        #self.SPLIT_EMAILS_CHAIN = (prompt_template | unwrap_vllm | parser)
-
-    def __call__(self, batch: List[str]): #-> List[str]:
-        ''' Generate texts from the prompts.
-         The output is a list of RequestOutput objects that contain the prompt,
-         generated text, and other information.'''
+    def __call__(self, batch_of_chunks: List[List[str]]) -> List[List[Dict]]:
+        """Generates structured outputs from batches of email chunks."""
         
-        # One big "joined prompt" into the chain to retain information between emails.
-        sampling_params = SamplingParams(temperature=0, max_tokens=8192)
-        
-        joined_chunks = "\n***\n".join(batch)
-        prompt = prompt_template.format(emails=joined_chunks)
+        prompts = [
+            prompt_template.format(emails="\n***\n".join(chunks))
+            for chunks in batch_of_chunks
+        ]
 
         with trace(
             name=f"actor_{ray.get_runtime_context().get_actor_id()}",
             project_name="extract_emails_vllm",
-            inputs={"prompt": prompt},
+            inputs={"prompt": prompts},
             metadata={
-                "chunk_num": len(batch),
+                "num_of_chunks": len(batch_of_chunks),
                 "invocation_method": "distributed inference with vllm"
             },
-        )as run:                                      
-            outputs_obj = self.llm.generate([prompt], sampling_params)
-            raw = outputs_obj[0].outputs[0].text
-            run.end(outputs={"raw": raw})                    
+        )as run:  
+            try:                                  
+                outputs_obj = self.llm.generate(prompts, self.sampling_params)
+                raw = [o.outputs[0].text for o in outputs_obj]
+                parsed = [self.parser.parse(r) for r in raw]
+                run.outputs={
+                    "raw_outputs": raw,
+                    "parsed_json": parsed
+                }        
+            except Exception as e:
+                run.error = f"{type(e).__name__}: {e}"
         
-        """
-            generated_text: List[str] = []
-        try:
-            for output in outputs:
-                parsed_output = parser.parse(output.outputs[0].text)
-                generated_text.append(parsed_output)
+        parsed_batches: List[Dict] = []
         
-        """
         try:
-            generated_text= self.parser.parse(raw) #List[str] = self.parser.parse(raw)
+            parsed_batches.append(parsed) #List[str] = self.parser.parse(raw)
         except OutputParserException as e:
-            LOGGER.error(f"JSON parsing failed for chunk of size {len(batch)}: {e}")
-            raise
+            LOGGER.error(f"JSON parsing failed for chunk of size {len(batch_of_chunks)}: {e}")
+            parsed_batches.append([]) 
 
-        #generated_text = self.SPLIT_EMAILS_CHAIN.invoke({"emails": joined_chunks}, config={"metadata": {"chunk_num": len(batch), "invocation_method": "distributed inference with vllm"}, "run_name": f"actor_{ray.get_runtime_context().get_actor_id()}"})
-        
-        '''
-        # Batch mode with a list of emails
-        outputs = self.llm.generate(batch["text"], sampling_params)
-        prompt: List[str] = []
-        generated_text: List[str] = []
-        for output in outputs:
-            parsed_output = parser.parse(output.outputs[0].text)
-            generated_text.append(' '.join([o.text for o in output.outputs]))
-        '''
-        return generated_text
+        return parsed_batches
 
 ray.init(ignore_reinit_error=True)
 
@@ -151,8 +136,13 @@ class RayLLMActor:
     def __init__(self, model_tag: str, tensor_parallel_size: int):
         self.predictor = LLMPredictor(model_tag, tensor_parallel_size)
 
-    def predict(self, batch_prompts: List[str]) -> List[Dict]:       
-        return self.predictor(batch_prompts)
+    def warmup(self):
+        """Load the model and compile kernels once."""      
+        _ = self.predictor.llm.generate(["warm-up"], SamplingParams(max_tokens=1))
+        return "ready"
+    
+    def predict(self, chunk_batch_prompts: List[List[str]]) -> List[List[Dict]]:       
+        return self.predictor(chunk_batch_prompts)
 
 
 def split_emails(file_path: str, actors: RayLLMActor) -> List[Dict]:
@@ -169,20 +159,15 @@ def split_emails(file_path: str, actors: RayLLMActor) -> List[Dict]:
         #  Implement logic for larger number of emails.
         splitted_emails: List[str] = split_email_thread(cleaned_msg_content)[::-1]
         LOGGER.info(f"Splitted emails: {len(splitted_emails)}")
-        #chunk_size= math.ceil(len(splitted_emails) / num_instances)
-        #LOGGER.info(f"Chunk size: {chunk_size}")
-        chunks: List[List[str]] = split_into_n_chunks(splitted_emails, num_instances)
+        batch_of_chunks, gpus_needed = split_for_gpus_dynamic(splitted_emails, num_instances, min_per_chunk= 4, max_per_chunk=7)
 
-        futures = []
-        for idx, batch in enumerate(chunks):
-            # Create a batch of prompts for the LLM
-            actor = actors[idx % num_instances]
-            futures.append(actor.predict.remote(batch))
+        actors_to_use = actors[:gpus_needed]
 
-        batch_results: List[List[Dict]] = ray.get(futures)
+        pool = ActorPool(actors_to_use)
+        batch_results = list(pool.map(lambda a, c: a.predict.remote(c), batch_of_chunks))
 
-        for sublist in batch_results:
-            gathered_emails.extend(sublist)
+        gathered_emails = [d for batch in gathered_emails for sublist in batch for d in sublist]
+
         LOGGER.info("Splitted and extracted emails...")      
 
         return gathered_emails  
@@ -209,10 +194,14 @@ if __name__ == "__main__":
 
     output_path = os.path.join(dir_path, f"{folder_name}.json")
 
-    # Create 8 actros, each pinned to 1 gpu 
+    # Create 8 actors, each pinned to 1 gpu 
     model_tag = "meta-llama/Llama-3.1-8B-Instruct"
     actors = [RayLLMActor.remote(model_tag, tensor_parallel_size) for _ in range(num_instances)]
     
+    #ray.get([a.warmup.remote() for a in actors])
+    for a in actors:
+        print(ray.get(a.warmup.remote()))
+
     email_data = []
     graph = nx.DiGraph()
 
@@ -225,7 +214,7 @@ if __name__ == "__main__":
                 try:               
                     result = split_emails(file_path, actors)
                     #graph = add_to_graph(graph, result, filename)
-                    email_data.extend(result) 
+                    email_data.extend(result)
                 except Exception as e:
                     LOGGER.error(f"Processing {filename} failed: {e}")
         
@@ -238,15 +227,5 @@ if __name__ == "__main__":
     finally:
         ray.shutdown()
     
-'''
-    plt.figure(figsize=(12, 10))
-    pos = nx.kamada_kawai_layout(graph)
-    node_options = {"node_color": "black", "node_size": 10}
-    edge_options = {"width": 1, "alpha": 0.5, "edge_color": "black", "arrowsize": 5, "connectionstyle": 'arc3,rad=0.2'}
-    label_options = {"font_size": 5, "font_color": "blue", "verticalalignment": "top", "horizontalalignment": "right"}
-    nx.draw_networkx_nodes(graph, pos, **node_options)
-    nx.draw_networkx_edges(graph, pos, **edge_options)
-    nx.draw_networkx_labels(graph, pos, **label_options)
-    plt.savefig("graph.png")
-'''
+
     

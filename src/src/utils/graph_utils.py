@@ -1,6 +1,7 @@
 import extract_msg, re
+import math
 from utils.logging_config import LOGGER
-from typing import List
+from typing import List, Tuple
 
 def write_file(content, filename):
     """ Writes the given content to the given file to the local directory """
@@ -65,20 +66,58 @@ def chunk_emails(email_list, chunk_size):
     for i in range(0, len(email_list), chunk_size):
         yield email_list[i:i + chunk_size]
 
-def split_into_n_chunks(items: List[str], n: int) -> List[List[str]]:
-    """
-    Split *items* into exactly *n* contiguous chunks.
-    - Chunks differ in size by at most 1.
-    - If len(items) < n, the extra chunks are empty lists.
-    """
-    if n <= 0:
-        raise ValueError("n must be a positive integer")
 
-    k, m = divmod(len(items), n)   # k = base size, m = first m chunks get +1
-    chunks = []
-    idx = 0
-    for i in range(n):
-        next_idx = idx + k + (1 if i < m else 0)
-        chunks.append(items[idx:next_idx])
+def split_for_gpus_dynamic(
+    emails: List[str],
+    num_gpus_available: int,
+    min_per_chunk: int,
+    max_per_chunk: int,
+) -> Tuple[List[List[List[str]]], int]:
+    """
+   Returns (batch_of_chunks, gpus_used)
+
+    batch_of_chunks[i]  ->  List[List[str]]  (all chunks assigned to GPU i)
+    gpus_used           ->  int  (how many GPUs you should launch/use)
+
+    Guarantees:
+    • every chunk length <= max_per_chunk
+    • chunk sizes differ by at most 1
+    • GPUs are used evenly (±1 chunk difference)
+    • if len(emails) <= max_per_chunk -> one GPU, one chunk
+    """
+    n = len(emails)
+    if n == 0:
+        return [], 0
+
+    # ---------- single GPU ----------
+    if n <= max_per_chunk:
+        return [[[e for e in emails]]], 1     # one GPU, one chunk
+
+    # ---------- how many GPUs do we actually need? ----------
+    # At least enough so that one chunk per GPU fits under the max size
+    gpus_used = min(num_gpus_available, math.ceil(n / max_per_chunk))
+
+    # ---------- decide how many chunks ----------
+    mid_size      = (min_per_chunk + max_per_chunk) / 2          
+    ideal_chunks  = math.ceil(n / mid_size)
+    chunk_count   = max(ideal_chunks, gpus_used)   # at least one chunk per GPU
+
+    # ---------- continuous slicing into `chunk_count` ----------
+    base, rem = divmod(n, chunk_count)
+    chunks: List[List[str]] = [] 
+    idx =  0
+    for i in range(chunk_count):
+        next_idx = idx + base + (1 if i < rem else 0)
+        chunks.append(emails[idx:next_idx])
         idx = next_idx
-    return chunks
+
+    # ---------- evenly distribute chunks across GPUs ----------
+    base_cpg, extra = divmod(len(chunks), gpus_used)
+    batch_of_chunks: List[List[List[str]]] = []
+    cursor = 0
+    for i in range(gpus_used):
+        chunk_size = base_cpg + (1 if i < extra else 0)
+        batch_of_chunks.append(chunks[cursor:cursor + chunk_size])
+        cursor += chunk_size
+
+    return batch_of_chunks, gpus_used
