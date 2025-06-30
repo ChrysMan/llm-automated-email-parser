@@ -71,7 +71,7 @@ def split_for_gpus_dynamic(
     emails: List[str],
     num_gpus_available: int,
     min_per_chunk: int,
-    max_per_chunk: int,
+    max_per_chunk: int
 ) -> Tuple[List[List[List[str]]], int]:
     """
    Returns (batch_of_chunks, gpus_used)
@@ -121,3 +121,50 @@ def split_for_gpus_dynamic(
         cursor += chunk_size
 
     return batch_of_chunks, gpus_used
+
+
+def smart_chunker(
+    emails: List[str],
+    num_gpus_available: int,
+    min_size: int,
+    max_size: int
+) -> Tuple[List[List[str]], int]:
+    """
+   Returns (chunks, gpus_used)
+
+    chunks[]            ->  List[List[str]]  (all chunks assigned to GPU i)
+    gpus_used           ->  int  (how many GPUs you should launch/use)
+
+    Guarantees:
+    • every chunk length <= max_per_chunk
+    • chunk sizes differ by at most 1
+    • GPUs are used evenly (±1 chunk difference)
+    • if len(emails) <= max_per_chunk -> one GPU, one chunk
+    """
+    n = len(emails)
+    if n == 0:
+        return [], 0
+
+    # ---------- single GPU ----------
+    if n <= max_size:
+        return [[[e for e in emails]]], 1     # one GPU, one chunk
+
+    # ---------- how many GPUs do we actually need? ----------
+    # At least enough so that one chunk per GPU fits under the max size
+    gpus_used = min(num_gpus_available, math.ceil(n / max_size))
+
+    # ---------- decide how many chunks ----------
+    mid_size      = (min_size + max_size) / 2          
+    ideal_chunks  = math.ceil(n / mid_size)
+    chunk_count   = max(ideal_chunks, gpus_used)   # at least one chunk per GPU
+
+    # ---------- continuous slicing into `chunk_count` ----------
+    base, rem = divmod(n, chunk_count)
+    chunks: List[List[str]] = [] 
+    idx =  0
+    for i in range(chunk_count):
+        next_idx = idx + base + (1 if i < rem else 0)
+        chunks.append(emails[idx:next_idx])
+        idx = next_idx
+
+    return chunks, gpus_used

@@ -5,21 +5,21 @@ import math
 from ray.util.actor_pool import ActorPool
 from packaging.version import Version
 from vllm import LLM, SamplingParams
-from langsmith import trace, Client 
+from langsmith import trace, Client
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from langchain_core.exceptions import OutputParserException
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 from utils.logging_config import LOGGER
-from utils.graph_utils import split_for_gpus_dynamic, extract_msg_file, append_file, chunk_emails, clean_data, split_email_thread
+from utils.graph_utils import smart_chunker, extract_msg_file, append_file, clean_data, split_email_thread
 
 assert Version(ray.__version__) >= Version(
     "2.22.0"), "Ray version must be at least 2.22.0"
 
+langsmith_api_key = os.environ.get("LANGSMITH_API_KEY")
+
 client = Client()
 
-langsmith_api_key = os.environ.get("LANGSMITH_API_KEY")
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
 os.environ["LANGCHAIN_ENDPOINT"]="https://api.smith.langchain.com"
 #os.environ["LANGCHAIN_PROJECT"] = "extract_emails_vllm"
@@ -93,43 +93,34 @@ class LLMPredictor:
         self.parser = parser
         self.sampling_params = SamplingParams(temperature=0, max_tokens=3500)
 
-    def __call__(self, batch_of_chunks: List[List[str]]) -> List[List[Dict]]:
-        """Generates structured outputs from batches of email chunks."""
+    def __call__(self, chunk: List[str]) -> List[Dict]:
+        """Generates structured outputs from email chunk."""
         
-        prompts = [
-            prompt_template.format(emails="\n***\n".join(chunks))
-            for chunks in batch_of_chunks
-        ]
-
+        prompts = prompt_template.format(emails="\n***\n".join(chunk))
+            
         with trace(
             name=f"actor_{ray.get_runtime_context().get_actor_id()}",
             project_name="extract_emails_vllm",
             inputs={"prompt": prompts},
             metadata={
-                "num_of_chunks": len(batch_of_chunks),
+                "num_of_chunks": len(chunk),
                 "invocation_method": "distributed inference with vllm"
             },
         )as run:  
             try:                                  
                 outputs_obj = self.llm.generate(prompts, self.sampling_params)
-                raw = [o.outputs[0].text for o in outputs_obj]
-                parsed = [self.parser.parse(r) for r in raw]
+                raw = outputs_obj.outputs[0].text 
+                parsed = self.parser.parse(raw) 
                 run.outputs={
                     "raw_outputs": raw,
                     "parsed_json": parsed
                 }        
+                return parsed  
             except Exception as e:
                 run.error = f"{type(e).__name__}: {e}"
+                LOGGER.error(f"JSON parsing failed for chunk of size {len(chunk)}: {e}")
+                return []
         
-        parsed_batches: List[Dict] = []
-        
-        try:
-            parsed_batches.append(parsed) #List[str] = self.parser.parse(raw)
-        except OutputParserException as e:
-            LOGGER.error(f"JSON parsing failed for chunk of size {len(batch_of_chunks)}: {e}")
-            parsed_batches.append([]) 
-
-        return parsed_batches
 
 ray.init(ignore_reinit_error=True)
 
@@ -143,92 +134,82 @@ class RayLLMActor:
         _ = self.predictor.llm.generate(["warm-up"], SamplingParams(max_tokens=1))
         return "ready"
     
-    def predict(self, chunk_batch_prompts: List[List[str]]) -> List[List[Dict]]:       
-        return self.predictor(chunk_batch_prompts)
+    def predict(self, chunk: List[str]) -> List[Dict]:       
+        return self.predictor(chunk)
 
+def process_directory_distributed(dir_path: str, actors: List[RayLLMActor]) -> List[Dict]:
+    """
+    Processes all .msg files in a directory using dynamic task assignment across actors.
+    """
+    indexed_chunks = []
+    filenames = []
+    global_index = 0
 
-def split_emails(file_path: str, actors: List[RayLLMActor]) -> List[Dict]:
+    for filename in os.listdir(dir_path):
+        if not filename.endswith(".msg"):
+            continue
+        
+        file_path = os.path.join(dir_path, filename)
+        raw_msg_content = extract_msg_file(file_path)
+        cleaned_msg_content = clean_data(raw_msg_content)
+        append_file(cleaned_msg_content, "clean.txt")
 
-    raw_msg_content = extract_msg_file(file_path)
-    cleaned_msg_content = clean_data(raw_msg_content)
-    append_file(cleaned_msg_content, "clean.txt")
-    LOGGER.info("Splitting emails...")
+        try:
+            splitted_emails: List[str] = split_email_thread(cleaned_msg_content)[::-1]
+            chunks, gpus_needed = smart_chunker(splitted_emails, num_instances, min_size=4, max_size=6)
+            for chunk in chunks:
+                indexed_chunks.append((global_index, chunk))
+                filenames.append(filename)
+                global_index += 1
+        except Exception as e:
+            LOGGER.error(f"Failed to preprocess {filename}: {e}")
 
-    gathered_emails: List[Dict] = []
+    actors_to_use = actors[:gpus_needed]
+    pool = ActorPool(actors_to_use)
+    ordered_results = [None] * len(indexed_chunks)
 
-    try:
+    for idx, chunk in indexed_chunks:
+        pool.submit(lambda a, c: (c[0], a.predict.remote(c[1])), (idx, chunk))
 
-        #  Implement logic for larger number of emails.
-        splitted_emails: List[str] = split_email_thread(cleaned_msg_content)[::-1]
-        LOGGER.info(f"Splitted emails: {len(splitted_emails)}")
-        batch_of_chunks, gpus_needed = split_for_gpus_dynamic(splitted_emails, num_instances, min_per_chunk= 4, max_per_chunk=7)
+    # Gather and reorder
+    for _ in range(len(indexed_chunks)):
+        idx, parsed = pool.get_next_unordered()
+        ordered_results[idx] = parsed
 
-        actors_to_use = actors[:gpus_needed]
-
-        pool = ActorPool(actors_to_use)
-        batch_results = list(pool.map(lambda a, c: a.predict.remote(c), batch_of_chunks))
-
-        gathered_emails = [d for batch in batch_results for sublist in batch for d in sublist]
-
-        LOGGER.info("Splitted and extracted emails...")      
-
-        return gathered_emails  
-    
-    except Exception as e:
-        LOGGER.error(f"Failed to split emails: {e}")
-
-
-    return gathered_emails
+        return ordered_results
 
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         LOGGER.error("Usage: python emailParsing.py <dir_path>")
         sys.exit(1)
-    
-    dir_path = sys.argv[1]
 
+    dir_path = sys.argv[1]
     if not os.path.isdir(dir_path):
         LOGGER.error(f"{dir_path} is not a valid directory.")
         sys.exit(1)
 
-    folder_name = os.path.basename(os.path.normpath(dir_path))
-
-    output_path = os.path.join(dir_path, f"{folder_name}.json")
-
-    # Create 8 actors, each pinned to 1 gpu 
     model_tag = "meta-llama/Llama-3.1-8B-Instruct"
-    actors = [RayLLMActor.remote(model_tag, tensor_parallel_size) for _ in range(num_instances)]
-    
-    #ray.get([a.warmup.remote() for a in actors])
-    for a in actors:
-        print(ray.get(a.warmup.remote()))
+    actors = [RayLLMActor.remote(model_tag, tensor_parallel_size=1) for _ in range(num_instances)]
+    ray.get([a.warmup.remote() for a in actors])
 
-    email_data = []
-    graph = nx.DiGraph()
+    try:
+        email_data = process_directory_distributed(
+            dir_path=dir_path,
+            actors=actors
+        )
 
+        output_path = os.path.join(dir_path, f"{os.path.basename(dir_path)}.json")
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(email_data, f, indent=4, ensure_ascii=False, default=str)
 
-    try: 
-
-        for filename in os.listdir(dir_path):
-            if filename.endswith(".msg"):
-                file_path = os.path.abspath(os.path.join(dir_path, filename))
-                try:               
-                    result = split_emails(file_path, actors)
-                    #graph = add_to_graph(graph, result, filename)
-                    email_data.extend(result)
-                except Exception as e:
-                    LOGGER.error(f"Processing {filename} failed: {e}")
-        
-        with open(output_path, "w", encoding="utf-8") as file:
-            json.dump(email_data, file, indent=4, ensure_ascii=False, default=str)
-   
-    except Exception as main_exc:
-        LOGGER.error(f"Fatal error in main: {main_exc}")
+    except Exception as e:
+        LOGGER.error(f"Fatal error in main: {e}")
 
     finally:
-        client.flush()
+        client.flush()  # Ensure all traces are sent to LangSmith
         ray.shutdown()
+
     
 
     
