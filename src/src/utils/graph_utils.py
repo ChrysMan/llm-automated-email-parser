@@ -147,7 +147,7 @@ def smart_chunker(
 
     # ---------- single GPU ----------
     if n <= max_size:
-        return [[[e for e in emails]]], 1     # one GPU, one chunk
+        return [emails], 1     # one GPU, one chunk
 
     # ---------- how many GPUs do we actually need? ----------
     # At least enough so that one chunk per GPU fits under the max size

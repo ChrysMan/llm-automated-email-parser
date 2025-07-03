@@ -1,14 +1,14 @@
 import json, os, sys
 import networkx as nx
 import ray
-import math
+import traceback
 from ray.util.actor_pool import ActorPool
 from packaging.version import Version
 from vllm import LLM, SamplingParams
 from langsmith import trace, Client
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from pydantic import BaseModel, Field
 from utils.logging_config import LOGGER
 from utils.graph_utils import smart_chunker, extract_msg_file, append_file, clean_data, split_email_thread
@@ -109,7 +109,7 @@ class LLMPredictor:
         )as run:  
             try:                                  
                 outputs_obj = self.llm.generate(prompts, self.sampling_params)
-                raw = outputs_obj.outputs[0].text 
+                raw = outputs_obj[0].outputs[0].text 
                 parsed = self.parser.parse(raw) 
                 run.outputs={
                     "raw_outputs": raw,
@@ -120,6 +120,8 @@ class LLMPredictor:
                 run.error = f"{type(e).__name__}: {e}"
                 LOGGER.error(f"JSON parsing failed for chunk of size {len(chunk)}: {e}")
                 return []
+            finally:
+                run.end()
         
 
 ray.init(ignore_reinit_error=True)
@@ -136,13 +138,20 @@ class RayLLMActor:
     
     def predict(self, chunk: List[str]) -> List[Dict]:       
         return self.predictor(chunk)
+    
+    def predict_with_index(self, idx_and_chunk: Tuple[int, List[str]]) -> Tuple[int, List[Dict]]:
+        idx, chunk = idx_and_chunk
+        result = self.predictor(chunk)
+        return idx, result
 
-def process_directory_distributed(dir_path: str, actors: List[RayLLMActor]) -> List[Dict]:
+
+def process_directory_distributed(dir_path: str) -> List[Dict]:
     """
     Processes all .msg files in a directory using dynamic task assignment across actors.
     """
     indexed_chunks = []
     filenames = []
+    cleaned_msg_content = []
     global_index = 0
 
     for filename in os.listdir(dir_path):
@@ -151,32 +160,37 @@ def process_directory_distributed(dir_path: str, actors: List[RayLLMActor]) -> L
         
         file_path = os.path.join(dir_path, filename)
         raw_msg_content = extract_msg_file(file_path)
-        cleaned_msg_content = clean_data(raw_msg_content)
+        cleaned_msg_content.append(clean_data(raw_msg_content))
         append_file(cleaned_msg_content, "clean.txt")
 
-        try:
-            splitted_emails: List[str] = split_email_thread(cleaned_msg_content)[::-1]
-            chunks, gpus_needed = smart_chunker(splitted_emails, num_instances, min_size=4, max_size=6)
-            for chunk in chunks:
-                indexed_chunks.append((global_index, chunk))
-                filenames.append(filename)
-                global_index += 1
-        except Exception as e:
-            LOGGER.error(f"Failed to preprocess {filename}: {e}")
+    try:
+        final_msg_content = "\n\n".join(cleaned_msg_content)
+        splitted_emails: List[str] = split_email_thread(final_msg_content)[::-1]
+        chunks, gpus_needed = smart_chunker(splitted_emails, num_instances, min_size=4, max_size=6)
+        for chunk in chunks:
+            indexed_chunks.append((global_index, chunk))
+            filenames.append(filename)
+            global_index += 1
+    except Exception as e:
+        LOGGER.error(f"Failed to preprocess {filename}: {e}")
 
-    actors_to_use = actors[:gpus_needed]
-    pool = ActorPool(actors_to_use)
+    # Initialise only the actors that are needed
+    actors = [RayLLMActor.remote(model_tag, tensor_parallel_size) for _ in range(gpus_needed)]
+    ray.get([a.warmup.remote() for a in actors])
+    pool = ActorPool(actors)
+
     ordered_results = [None] * len(indexed_chunks)
 
+    # Submit all tasks (no need to collect object_refs here)
     for idx, chunk in indexed_chunks:
-        pool.submit(lambda a, c: (c[0], a.predict.remote(c[1])), (idx, chunk))
+        pool.submit(lambda a, c: a.predict_with_index.remote(c), (idx,chunk))
 
-    # Gather and reorder
+    # Retrieve results in any order, then reorder
     for _ in range(len(indexed_chunks)):
         idx, parsed = pool.get_next_unordered()
         ordered_results[idx] = parsed
 
-        return ordered_results
+    return ordered_results
 
 
 if __name__ == "__main__":
@@ -190,21 +204,16 @@ if __name__ == "__main__":
         sys.exit(1)
 
     model_tag = "meta-llama/Llama-3.1-8B-Instruct"
-    actors = [RayLLMActor.remote(model_tag, tensor_parallel_size=1) for _ in range(num_instances)]
-    ray.get([a.warmup.remote() for a in actors])
 
     try:
-        email_data = process_directory_distributed(
-            dir_path=dir_path,
-            actors=actors
-        )
+        email_data = process_directory_distributed(dir_path=dir_path)
 
         output_path = os.path.join(dir_path, f"{os.path.basename(dir_path)}.json")
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(email_data, f, indent=4, ensure_ascii=False, default=str)
 
     except Exception as e:
-        LOGGER.error(f"Fatal error in main: {e}")
+        LOGGER.error("Fatal error in main:\n%s", traceback.format_exc())
 
     finally:
         client.flush()  # Ensure all traces are sent to LangSmith
