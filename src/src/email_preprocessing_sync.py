@@ -2,7 +2,7 @@ import json, os, sys
 import networkx as nx
 from utils.logging_config import LOGGER
 from chains.extract_emails import split_and_extract_emails_sync
-from tools.build_graph import build_email_graph
+#from tools.build_graph import build_email_graph
 from time import time
 
 if __name__ == "__main__":
@@ -31,7 +31,7 @@ if __name__ == "__main__":
                 data = split_and_extract_emails_sync(file_path)
                 LOGGER.info(f"Time taken to process {filename}: {time() - tic} seconds")
 
-                graph = build_email_graph(graph, data, filename)
+                #graph = build_email_graph(graph, data, filename)
                 email_data.extend(data) 
             except Exception as e:
                 LOGGER.error(f"Processing {filename} failed: {e}")

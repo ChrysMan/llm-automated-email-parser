@@ -1,5 +1,4 @@
 import json, os, sys
-import networkx as nx
 import ray
 import traceback
 from ray.util.actor_pool import ActorPool
@@ -8,10 +7,10 @@ from vllm import LLM, SamplingParams
 from langsmith import trace, Client
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Tuple
 from pydantic import BaseModel, Field
 from utils.logging_config import LOGGER
-from utils.graph_utils import smart_chunker, extract_msg_file, append_file, clean_data, split_email_thread
+from utils.graph_utils import smart_chunker, extract_msg_file, clean_data, split_email_thread
 
 assert Version(ray.__version__) >= Version(
     "2.22.0"), "Ray version must be at least 2.22.0"
@@ -22,7 +21,6 @@ client = Client()
 
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
 os.environ["LANGCHAIN_ENDPOINT"]="https://api.smith.langchain.com"
-#os.environ["LANGCHAIN_PROJECT"] = "extract_emails_vllm"
 if not langsmith_api_key:
     LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
     
@@ -50,15 +48,16 @@ prompt_template = PromptTemplate.from_template(
 You are an expert assistant who processes email threads with precision and no loss of content.
 The input consists of several email strings. Some emails may be duplicates. Your task is:
 1. Split the email thread into individual emails using "***" as the only delimiter. Each "***" marks the end of one complete email.
-2. Identify and remove any duplicate emails in the list based on content mainting the chronological order.
+2. In the case were the email thread contains only one email, do not split the email thread.
 3. Return the unique emails **ONLY** as a JSON list, where each email is a **separate object** with the following fields:
 
 - sender: The sender of the email. Store their name and email, if available, as a string in the format "Name <email@example.com>". If only a name is present, store it as "Name". 
-- sent: Extract and include **only the date and time**. 
+- sent: Return the full date and time string preserving the formatting: Full weekday name, full month name day, four-digit year, hour:minute:second AM/PM. Be carefull to not change the date or time.
+  If the date is not in English, translate it exactly to English without changing the date or time.
 - to: A list of recipients' names and emails, if available. Store each entry as a string in the format "Name <email@example.com>" or "Name". The "To" field may contain multiple recipients separated by commas or semicolons but is usually one.
 - cc: A list of additional recipients' names and emails. Store each entry as a string in the format "Name <email@example.com>" or "Name". The "Cc" field may contain multiple recipients separated by commas or semicolons.
 - subject: The subject of the email, stored as a string. Extract this after the "Subject:" field.
-- body:  Include the full content of the message starting from the line **after** "Subject:" or "wrote:", and continue **until the next delimiter**. Do not summarize or skip any content.
+- body:  Include the full content of the message starting from the line **after** "Subject:" or "wrote:", and continue **until the next delimiter** (if it exists). Do not summarize or skip any content.
 
 4. Maintain the chronological order of the emails in the output.
 5. Do not hallucinate or add any information that is not present in the email thread.
@@ -148,25 +147,34 @@ class RayLLMActor:
 def process_directory_distributed(dir_path: str) -> List[Dict]:
     """
     Processes all .msg files in a directory using dynamic task assignment across actors.
+    Returns a flat list of extracted email dictionaries.
     """
     indexed_chunks = []
     filenames = []
     cleaned_msg_content = []
     global_index = 0
 
+     # --- Load and clean all .msg files ---
     for filename in os.listdir(dir_path):
         if not filename.endswith(".msg"):
             continue
         
         file_path = os.path.join(dir_path, filename)
-        raw_msg_content = extract_msg_file(file_path)
-        cleaned_msg_content.append(clean_data(raw_msg_content))
-        append_file(cleaned_msg_content, "clean.txt")
 
+        try:
+            raw_msg_content = extract_msg_file(file_path)
+            cleaned_msg_content.append(clean_data(raw_msg_content))
+        except Exception as e:
+            LOGGER.error(f"Failed to process {filename}: {e}")
+            return []
+
+    # --- Split and chunk emails ---
     try:
         final_msg_content = "\n\n".join(cleaned_msg_content)
         splitted_emails: List[str] = split_email_thread(final_msg_content)[::-1]
         chunks, gpus_needed = smart_chunker(splitted_emails, num_instances, min_size=4, max_size=6)
+        LOGGER.info(f"Total emails split: {len(splitted_emails)}, Chunks created: {len(chunks)}, GPUs needed: {gpus_needed}")
+
         for chunk in chunks:
             indexed_chunks.append((global_index, chunk))
             filenames.append(filename)
@@ -174,23 +182,27 @@ def process_directory_distributed(dir_path: str) -> List[Dict]:
     except Exception as e:
         LOGGER.error(f"Failed to preprocess {filename}: {e}")
 
-    # Initialise only the actors that are needed
+    # --- Start the actors dynamically based on GPUs needed ---
     actors = [RayLLMActor.remote(model_tag, tensor_parallel_size) for _ in range(gpus_needed)]
     ray.get([a.warmup.remote() for a in actors])
     pool = ActorPool(actors)
 
-    ordered_results = [None] * len(indexed_chunks)
+    # --- Submit tasks and collect results ---
+    ordered_results: List[Optional[List[Dict]]] = [None] * len(indexed_chunks)
 
-    # Submit all tasks (no need to collect object_refs here)
     for idx, chunk in indexed_chunks:
         pool.submit(lambda a, c: a.predict_with_index.remote(c), (idx,chunk))
 
-    # Retrieve results in any order, then reorder
     for _ in range(len(indexed_chunks)):
-        idx, parsed = pool.get_next_unordered()
-        ordered_results[idx] = parsed
+        try:
+            idx, parsed = pool.get_next_unordered()
+            ordered_results[idx] = parsed
+        except Exception as e:
+            LOGGER.error(f"Error retrieving result from actor pool: {e}")
 
-    return ordered_results
+    flattened_results = [email for batch in ordered_results if batch for email in batch]
+
+    return flattened_results
 
 
 if __name__ == "__main__":

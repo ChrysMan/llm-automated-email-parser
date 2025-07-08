@@ -50,17 +50,17 @@ prompt_template = PromptTemplate.from_template(
 You are an expert assistant who processes email threads with precision and no loss of content.
 The input consists of several email strings. Some emails may be duplicates. Your task is:
 1. Split the email thread into individual emails using "***" as the only delimiter. Each "***" marks the end of one complete email.
-2. Identify and remove any duplicate emails in the list based on content mainting the chronological order.
+2. In the case were the email thread contains only one email, do not split the email thread.
 3. Return the unique emails **ONLY** as a JSON list, where each email is a **separate object** with the following fields:
 
 - sender: The sender of the email. Store their name and email, if available, as a string in the format "Name <email@example.com>". If only a name is present, store it as "Name". 
-- sent: Extract and include **only the date and time**. 
+- sent: Extract the date and write it in this format: Full weekday name, full month name day, four-digit year, hour:minute:second AM/PM. 
 - to: A list of recipients' names and emails, if available. Store each entry as a string in the format "Name <email@example.com>" or "Name". The "To" field may contain multiple recipients separated by commas or semicolons but is usually one.
 - cc: A list of additional recipients' names and emails. Store each entry as a string in the format "Name <email@example.com>" or "Name". The "Cc" field may contain multiple recipients separated by commas or semicolons.
 - subject: The subject of the email, stored as a string. Extract this after the "Subject:" field.
-- body:  Include the full content of the message starting from the line **after** "Subject:" or "wrote:", and continue **until the next delimiter**. Do not summarize or skip any content.
+- body:  Include the full content of the message starting from the line **after** "Subject:" or "wrote:", and continue **until the next delimiter** (if it exists). Do not summarize or skip any content.
 
-4. Maintain the chronological order of the emails in the output.
+4. Maintain the chronological order of the emails in the output and be really careful to not change the dates.
 5. Do not hallucinate or add any information that is not present in the email thread.
 6. The length of the JSON list needs to be the same as the number of the emails strictly.
 7. Output ONLY the raw JSON array. Do NOT include extra quotes, explanations, or any text.
@@ -200,9 +200,7 @@ if __name__ == "__main__":
     model_tag = "meta-llama/Llama-3.1-8B-Instruct"
     actors = [RayLLMActor.remote(model_tag, tensor_parallel_size) for _ in range(num_instances)]
     
-    #ray.get([a.warmup.remote() for a in actors])
-    for a in actors:
-        print(ray.get(a.warmup.remote()))
+    ray.get([a.warmup.remote() for a in actors])
 
     email_data = []
     graph = nx.DiGraph()
