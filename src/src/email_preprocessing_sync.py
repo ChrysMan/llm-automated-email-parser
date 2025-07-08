@@ -38,5 +38,7 @@ if __name__ == "__main__":
     
     with open(output_path, "w", encoding="utf-8") as file:
         json.dump(email_data, file, indent=4, ensure_ascii=False, default=str)
+
+    LOGGER.info(f"Time taken to process: {time() - tic} seconds")
     
 

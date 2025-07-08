@@ -1,7 +1,8 @@
 
 import asyncio, os
 import torch 
-#from ollama import OllamaLLM
+import math
+from langchain_ollama import OllamaLLM
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, pipeline
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import Runnable
@@ -30,7 +31,8 @@ class EmailInfo(BaseModel):
     subject: Optional[str] = Field(None, description="The subject of the email.")
     body: str = Field(..., description="The email body, excluding unnecessary whitespace.")
 
-#local_model = OllamaLLM(model="llama3.1",temperature=0, num_ctx=32768, num_predict=16384)
+local_model = OllamaLLM(model="llama3.1",temperature=0, num_ctx=8192, num_predict=4096, num_gpu=1, stop=["<|eot_id|>"])
+
 parser = JsonOutputParser(pydantic_object=EmailInfo, json_compatible=True)
 
 prompt_template = PromptTemplate.from_template(
@@ -43,14 +45,15 @@ The input consists of several email strings. Some emails may be duplicates. Your
 3. Return the unique emails **ONLY** as a JSON list, where each email is a **separate object** with the following fields:
 
 - sender: The sender of the email. Store their name and email, if available, as a string in the format "Name <email@example.com>". If only a name is present, store it as "Name". 
-- sent: Extract the date and write it in this format: Full weekday name, full month name day, four-digit year, hour:minute:second AM/PM. 
+- sent: Return the full date and time string preserving the formatting: Full weekday name, full month name day, four-digit year, hour:minute:second AM/PM. Be carefull to not change the date or time.
+  If the date is not in English, translate it exactly to English without changing the date or time.
 - to: A list of recipients' names and emails, if available. Store each entry as a string in the format "Name <email@example.com>" or "Name". The "To" field may contain multiple recipients separated by commas or semicolons but is usually one.
 - cc: A list of additional recipients' names and emails. Store each entry as a string in the format "Name <email@example.com>" or "Name". The "Cc" field may contain multiple recipients separated by commas or semicolons.
 - subject: The subject of the email, stored as a string. Extract this after the "Subject:" field.
-- body:  Include the full content of the message starting from the line **after** "Subject:" or "wrote:", and continue **until the next delimiter** (if it exists). Do not summarize or skip any content.
+- body: Include the full message text up to but not including the next delimiter "***". Do not include "**" in the body. Do not summarize or skip any content. If the body is empty, return an empty string.
 
-4. Maintain the chronological order of the emails in the output and be really careful to not change the dates.
-5. Do not hallucinate or add any information that is not present in the email thread.
+4. Maintain the chronological order of the emails in the output.
+5. Do not hallucinate or add any information that is not present in the email thread. If you are unsure about a date, copy it exactly as shown, translating only the weekday/month names.
 6. The length of the JSON list needs to be the same as the number of the emails strictly.
 7. Output ONLY the raw JSON array. Do NOT include extra quotes, explanations, or any text.
 
@@ -100,31 +103,34 @@ def load_model(model_id: str = "meta-llama/Llama-3.1-8B-Instruct") -> Tuple[Auto
     
     return model, tokenizer
 
-def load_pipeline(model, tokenizer):
+def load_pipeline(model, tokenizer=None):
     """
     Load the HuggingFace pipeline for text generation.
 
     Args:
-        model (AutoModelForCausalLM): The loaded model.
+        model (AutoModelForCausalLM) / (Local model): The loaded model.
         tokenizer (AutoTokenizer): The loaded tokenizer.
 
     Returns:
         pipeline: The HuggingFace pipeline for text generation.
     """
-    pipe = pipeline(
-        "text-generation",
-        model=model,
-        tokenizer=tokenizer,
-        return_full_text=False,
-        max_new_tokens= 4096,
-        do_sample=False,
-        temperature=0.0
-    )
 
+    if tokenizer is None:
+        SPLIT_EMAILS_CHAIN = (prompt_template | model | parser)
+    else:
+        pipe = pipeline(
+            "text-generation",
+            model=model,
+            tokenizer=tokenizer,
+            return_full_text=False,
+            max_new_tokens= 4096,
+            do_sample=False,
+            temperature=0.0
+        )
 
-    llm = HuggingFacePipeline(pipeline=pipe)
+        llm = HuggingFacePipeline(pipeline=pipe)
 
-    SPLIT_EMAILS_CHAIN = (prompt_template | llm | parser)
+        SPLIT_EMAILS_CHAIN = (prompt_template | llm | parser)
 
     return SPLIT_EMAILS_CHAIN
 
@@ -141,8 +147,9 @@ def split_and_extract_emails_sync(file_path: str) -> List[Dict]:
     os.environ["LANGCHAIN_PROJECT"] = "extract_emails_sync"
     
     try:
-        model, tokenizer = load_model()
-        split_emails_chain = load_pipeline(model, tokenizer)
+        #model, tokenizer = load_model()
+        #split_emails_chain = load_pipeline(model, tokenizer)
+        split_emails_chain = load_pipeline(local_model)
     except Exception as e:
         LOGGER.error(f"Failed to load model or pipeline: {type(e).__name__}: {e}")
         return []
@@ -162,13 +169,14 @@ def split_and_extract_emails_sync(file_path: str) -> List[Dict]:
         return []
     
     raw_model_output = []
-    chunk_size = 6
+    mid_size = (4 + 7) / 2          
+    ideal_chunks = math.ceil(len(splitted_emails) / mid_size)
 
     try:
-        for i, chunk in enumerate(chunk_emails(splitted_emails, chunk_size=chunk_size)):
+        for i, chunk in enumerate(chunk_emails(splitted_emails, chunk_size=ideal_chunks)):
             formatted_chunk = "\n*** \n".join(chunk)
 
-            LOGGER.info(f"Processing chunk {i+1}/{(len(splitted_emails) + chunk_size - 1) // chunk_size}...")
+            LOGGER.info(f"Processing chunk {i+1}/{(len(splitted_emails) + ideal_chunks - 1) // ideal_chunks}...")
             tic = time()
 
             outputs = split_emails_chain.invoke(

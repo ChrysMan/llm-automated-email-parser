@@ -1,6 +1,7 @@
 import json, os, sys
 import ray
 import traceback
+from time import time
 from ray.util.actor_pool import ActorPool
 from packaging.version import Version
 from vllm import LLM, SamplingParams
@@ -10,7 +11,7 @@ from langchain_core.output_parsers import JsonOutputParser
 from typing import Optional, List, Dict, Tuple
 from pydantic import BaseModel, Field
 from utils.logging_config import LOGGER
-from utils.graph_utils import smart_chunker, extract_msg_file, clean_data, split_email_thread
+from utils.graph_utils import smart_chunker, extract_msg_file, clean_data, split_email_thread, write_file
 
 assert Version(ray.__version__) >= Version(
     "2.22.0"), "Ray version must be at least 2.22.0"
@@ -57,10 +58,10 @@ The input consists of several email strings. Some emails may be duplicates. Your
 - to: A list of recipients' names and emails, if available. Store each entry as a string in the format "Name <email@example.com>" or "Name". The "To" field may contain multiple recipients separated by commas or semicolons but is usually one.
 - cc: A list of additional recipients' names and emails. Store each entry as a string in the format "Name <email@example.com>" or "Name". The "Cc" field may contain multiple recipients separated by commas or semicolons.
 - subject: The subject of the email, stored as a string. Extract this after the "Subject:" field.
-- body:  Include the full content of the message starting from the line **after** "Subject:" or "wrote:", and continue **until the next delimiter** (if it exists). Do not summarize or skip any content.
+- body: Include the full message text up to but not including the next delimiter "***". Do not include "**" in the body. Do not summarize or skip any content. If the body is empty, return an empty string.
 
 4. Maintain the chronological order of the emails in the output.
-5. Do not hallucinate or add any information that is not present in the email thread.
+5. Do not hallucinate or add any information that is not present in the email thread. If you are unsure about a date, copy it exactly as shown, translating only the weekday/month names.
 6. The length of the JSON list needs to be the same as the number of the emails strictly.
 7. Output ONLY the raw JSON array. Do NOT include extra quotes, explanations, or any text.
 
@@ -164,6 +165,7 @@ def process_directory_distributed(dir_path: str) -> List[Dict]:
         try:
             raw_msg_content = extract_msg_file(file_path)
             cleaned_msg_content.append(clean_data(raw_msg_content))
+            write_file(cleaned_msg_content[-1], "Cleaned.txt")  
         except Exception as e:
             LOGGER.error(f"Failed to process {filename}: {e}")
             return []
@@ -206,6 +208,9 @@ def process_directory_distributed(dir_path: str) -> List[Dict]:
 
 
 if __name__ == "__main__":
+
+    tic = time()
+
     if len(sys.argv) != 2:
         LOGGER.error("Usage: python emailParsing.py <dir_path>")
         sys.exit(1)
@@ -223,6 +228,8 @@ if __name__ == "__main__":
         output_path = os.path.join(dir_path, f"{os.path.basename(dir_path)}.json")
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(email_data, f, indent=4, ensure_ascii=False, default=str)
+
+        LOGGER.info(f"Time taken to process: {time() - tic} seconds")
 
     except Exception as e:
         LOGGER.error("Fatal error in main:\n%s", traceback.format_exc())
