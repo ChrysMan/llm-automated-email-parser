@@ -3,3 +3,4 @@ __pycache__
 *.json
 test.py
 graph_test.ipynb
+environment.yml
