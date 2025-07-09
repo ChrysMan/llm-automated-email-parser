@@ -11,7 +11,7 @@ from langchain_core.output_parsers import JsonOutputParser
 from typing import Optional, List, Dict, Tuple
 from pydantic import BaseModel, Field
 from utils.logging_config import LOGGER
-from utils.graph_utils import smart_chunker, extract_msg_file, clean_data, split_email_thread, write_file
+from utils.graph_utils import smart_chunker, extract_msg_file, clean_data, split_email_thread, write_file, append_file
 
 assert Version(ray.__version__) >= Version(
     "2.22.0"), "Ray version must be at least 2.22.0"
@@ -52,8 +52,8 @@ The input consists of several email strings. Some emails may be duplicates. Your
 2. In the case were the email thread contains only one email, do not split the email thread.
 3. Return the unique emails **ONLY** as a JSON list, where each email is a **separate object** with the following fields:
 
-- sender: The sender of the email. Store their name and email, if available, as a string in the format "Name <email@example.com>". If only a name is present, store it as "Name". 
-- sent: Return the full date and time string preserving the formatting: Full weekday name, full month name day, four-digit year, hour:minute:second AM/PM. Be carefull to not change the date or time.
+- sender: The sender of the email. Store their name and email, if available, as a string in the format "Name <email@example.com>". If only a name is present, store it as "Name". Extract this after the "From:" field. 
+- sent: Extract the full date and time string in the following format: Full weekday name, full month name day, four-digit year, hour:minute:second AM/PM. Be carefull to not change the date or time.
   If the date is not in English, translate it exactly to English without changing the date or time.
 - to: A list of recipients' names and emails, if available. Store each entry as a string in the format "Name <email@example.com>" or "Name". The "To" field may contain multiple recipients separated by commas or semicolons but is usually one.
 - cc: A list of additional recipients' names and emails. Store each entry as a string in the format "Name <email@example.com>" or "Name". The "Cc" field may contain multiple recipients separated by commas or semicolons.
@@ -108,9 +108,7 @@ class LLMPredictor:
             },
         )as run:  
             try:                                  
-                outputs_obj = self.llm.generate(prompts, self.sampling_params)
-                raw = outputs_obj[0].outputs[0].text 
-                parsed = self.parser.parse(raw) 
+                raw, parsed = self.call_with_retry(prompts, max_retries=3) 
                 run.outputs={
                     "raw_outputs": raw,
                     "parsed_json": parsed
@@ -122,6 +120,21 @@ class LLMPredictor:
                 return []
             finally:
                 run.end()
+
+        def call_with_retry(self, prompts, max_retries=3, delay=2):
+            for attempt in range(1, max_retries + 1):
+                try:
+                    outputs_obj = self.llm.generate(prompts, self.sampling_params)
+                    raw = outputs_obj[0].outputs[0].text
+                    parsed = self.parser.parse(raw)
+                    return raw, parsed
+                except Exception as e:
+                    LOGGER.warning(f"Attempt {attempt} failed for chunk. Error: {e}")
+                    if attempt == max_retries:
+                        raise  # Re-raise on final failure
+                    else:
+                        import time
+                        time.sleep(delay * attempt) 
         
 
 ray.init(ignore_reinit_error=True)
@@ -164,8 +177,9 @@ def process_directory_distributed(dir_path: str) -> List[Dict]:
 
         try:
             raw_msg_content = extract_msg_file(file_path)
+            append_file(raw_msg_content, "Raw.txt")
             cleaned_msg_content.append(clean_data(raw_msg_content))
-            write_file(cleaned_msg_content[-1], "Cleaned.txt")  
+            append_file(cleaned_msg_content[-1], "Cleaned.txt")  
         except Exception as e:
             LOGGER.error(f"Failed to process {filename}: {e}")
             return []
@@ -190,21 +204,28 @@ def process_directory_distributed(dir_path: str) -> List[Dict]:
     pool = ActorPool(actors)
 
     # --- Submit tasks and collect results ---
-    ordered_results: List[Optional[List[Dict]]] = [None] * len(indexed_chunks)
+    try:
+        ordered_results: List[Optional[List[Dict]]] = [None] * len(indexed_chunks)
 
-    for idx, chunk in indexed_chunks:
-        pool.submit(lambda a, c: a.predict_with_index.remote(c), (idx,chunk))
+        for idx, chunk in indexed_chunks:
+            pool.submit(lambda a, c: a.predict_with_index.remote(c), (idx,chunk))
 
-    for _ in range(len(indexed_chunks)):
-        try:
-            idx, parsed = pool.get_next_unordered()
-            ordered_results[idx] = parsed
-        except Exception as e:
-            LOGGER.error(f"Error retrieving result from actor pool: {e}")
+        for _ in range(len(indexed_chunks)):
+            try:
+                idx, parsed = pool.get_next_unordered()
+                ordered_results[idx] = parsed
+            except Exception as e:
+                LOGGER.error(f"Error retrieving result from actor pool: {e}")
 
-    flattened_results = [email for batch in ordered_results if batch for email in batch]
+        flattened_results = [email for batch in ordered_results if batch for email in batch]
 
-    return flattened_results
+        return flattened_results
+    finally:
+        for actor in actors:
+            try:
+                ray.kill(actor)
+            except Exception as e:
+                LOGGER.warning(f"Error killing actor: {e}")
 
 
 if __name__ == "__main__":
@@ -236,7 +257,7 @@ if __name__ == "__main__":
 
     finally:
         client.flush()  # Ensure all traces are sent to LangSmith
-        ray.shutdown()
+        ray.shutdown()  # Clean up actors and Ray runtime
 
     
 

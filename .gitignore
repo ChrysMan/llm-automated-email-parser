@@ -1,3 +1,5 @@
 __pycache__
 *.txt
 *.json
+test.py
+graph_test.ipynb

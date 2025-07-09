@@ -30,8 +30,10 @@ def extract_msg_file(file_path) -> str:
 
     formatted_date = msg.date.strftime("%A, %B %d, %Y %I:%M %p")
 
-    msg_to_text =f"""
-From: {msg.sender}
+    if msg.cc is None:
+        msg.cc = ""
+        
+    msg_to_text =f"""From: {msg.sender}
 Sent: {formatted_date} 
 To: {msg.to}
 Cc: {msg.cc}
@@ -60,6 +62,20 @@ def split_email_thread(text: str) -> list:
         else:
             formatted_parts[-1] += f"{part}"
     return formatted_parts
+
+def find_best_chunk_size(total_emails, min_chunk, max_chunk):
+    best_chunk = min_chunk
+    highest_remainder = -1  
+
+    for chunk_size in range(max_chunk, min_chunk - 1, -1):
+        remainder = total_emails % chunk_size
+        if remainder == 0:
+            return chunk_size  # Prefer exact division first
+        elif remainder > highest_remainder:
+            highest_remainder = remainder
+            best_chunk = chunk_size
+
+    return best_chunk  # Return the chunk size with the highest leftover
 
 def chunk_emails(email_list, chunk_size):
     """ Yield successive chunks of n emails from the list. """

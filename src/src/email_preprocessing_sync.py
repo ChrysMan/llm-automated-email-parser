@@ -6,6 +6,9 @@ from chains.extract_emails import split_and_extract_emails_sync
 from time import time
 
 if __name__ == "__main__":
+
+    tic1 = time()
+
     if len(sys.argv) != 2:
         LOGGER.error("Usage: python emailParsing.py <dir_path>")
         sys.exit(1)
@@ -27,9 +30,9 @@ if __name__ == "__main__":
             file_path = os.path.join(dir_path, filename)
             try:
 
-                tic = time()
+                tic2 = time()
                 data = split_and_extract_emails_sync(file_path)
-                LOGGER.info(f"Time taken to process {filename}: {time() - tic} seconds")
+                LOGGER.info(f"Time taken to process {filename}: {time() - tic2} seconds")
 
                 #graph = build_email_graph(graph, data, filename)
                 email_data.extend(data) 
@@ -39,6 +42,6 @@ if __name__ == "__main__":
     with open(output_path, "w", encoding="utf-8") as file:
         json.dump(email_data, file, indent=4, ensure_ascii=False, default=str)
 
-    LOGGER.info(f"Time taken to process: {time() - tic} seconds")
+    LOGGER.info(f"Time taken to process: {time() - tic1} seconds")
     
 

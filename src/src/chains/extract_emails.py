@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Tuple
 from time import time
 from utils.logging_config import LOGGER
-from utils.graph_utils import extract_msg_file, clean_data, split_email_thread, chunk_emails
+from utils.graph_utils import extract_msg_file, clean_data, split_email_thread, chunk_emails,find_best_chunk_size
 
 
 langsmith_api_key = os.environ.get("LANGSMITH_API_KEY")
@@ -169,14 +169,14 @@ def split_and_extract_emails_sync(file_path: str) -> List[Dict]:
         return []
     
     raw_model_output = []
-    mid_size = (4 + 7) / 2          
-    ideal_chunks = math.ceil(len(splitted_emails) / mid_size)
+    
+    ideal_chunk = find_best_chunk_size(len(splitted_emails), 4, 7)
 
     try:
-        for i, chunk in enumerate(chunk_emails(splitted_emails, chunk_size=ideal_chunks)):
+        for i, chunk in enumerate(chunk_emails(splitted_emails, chunk_size=ideal_chunk)):
             formatted_chunk = "\n*** \n".join(chunk)
 
-            LOGGER.info(f"Processing chunk {i+1}/{(len(splitted_emails) + ideal_chunks - 1) // ideal_chunks}...")
+            LOGGER.info(f"Processing chunk {i+1}/{(len(splitted_emails) + ideal_chunk - 1) // ideal_chunk}...")
             tic = time()
 
             outputs = split_emails_chain.invoke(
@@ -235,11 +235,11 @@ async def split_and_extract_emails_async(file_path: str) -> List[Dict]:
         return []
 
     raw_model_output = []
-    chunk_size = 5
+    ideal_chunk = find_best_chunk_size(len(splitted_emails), 4, 7)
 
     try:
-        chunks = chunk_emails(splitted_emails, chunk_size=chunk_size)
-        tasks = [process_chunk_async(chunk, chunk_size, split_emails_chain) for chunk in chunks]
+        chunks = chunk_emails(splitted_emails, chunk_size=ideal_chunk)
+        tasks = [process_chunk_async(chunk, ideal_chunk, split_emails_chain) for chunk in chunks]
 
         LOGGER.info(f"Processing {len(tasks)} chunks asynchronously...")
         results = await asyncio.gather(*tasks, return_exceptions=True)
