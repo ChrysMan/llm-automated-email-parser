@@ -36,21 +36,20 @@ local_model = OllamaLLM(model="llama3.1",temperature=0, num_ctx=8192, num_predic
 parser = JsonOutputParser(pydantic_object=EmailInfo, json_compatible=True)
 
 prompt_template = PromptTemplate.from_template(
-"""<|begin_of_text|>
-<|start_header_id|>system<|end_header_id|>
+"""<|start_header_id|>system<|end_header_id|>
 You are an expert assistant who processes email threads with precision and no loss of content.
 The input consists of several email strings. Some emails may be duplicates. Your task is:
-1. Split the email thread into individual emails using "***" as the only delimiter. Each "***" marks the end of one complete email.
-2. In the case were the email thread contains only one email, do not split the email thread.
+1. Split the email thread into individual emails using "-***-" as the only delimiter. Each "-***-" marks the end of one complete email.
+2. Some email headers may be in different languages, such as Chinese or Russian. Translate the headers to English without changing the date or time and split the email thread. The delimeter "-***-" might not be present in that case
 3. Return the unique emails **ONLY** as a JSON list, where each email is a **separate object** with the following fields:
 
-- sender: The sender of the email. Store their name and email, if available, as a string in the format "Name <email@example.com>". If only a name is present, store it as "Name". 
-- sent: Return the full date and time string preserving the formatting: Full weekday name, full month name day, four-digit year, hour:minute:second AM/PM. Be carefull to not change the date or time.
+- sender: The sender of the email. Store their name and email, if available, as a string in the format "Name <email@example.com>". If only a name is present, store it as "Name". Extract this after the "From:" field. 
+- sent: Extract the full date and time string in the following format: Full weekday name, full month name day, four-digit year, hour:minute:second AM/PM. Be carefull to not change the date or time.
   If the date is not in English, translate it exactly to English without changing the date or time.
 - to: A list of recipients' names and emails, if available. Store each entry as a string in the format "Name <email@example.com>" or "Name". The "To" field may contain multiple recipients separated by commas or semicolons but is usually one.
 - cc: A list of additional recipients' names and emails. Store each entry as a string in the format "Name <email@example.com>" or "Name". The "Cc" field may contain multiple recipients separated by commas or semicolons.
 - subject: The subject of the email, stored as a string. Extract this after the "Subject:" field.
-- body: Include the full message text up to but not including the next delimiter "***". Do not include "**" in the body. Do not summarize or skip any content. If the body is empty, return an empty string.
+- body: Include the full message text up to but not including the next delimiter "-***-". Do not include "-***-" in the body. Do not summarize or skip any content. If the body is empty, return an empty string.
 
 4. Maintain the chronological order of the emails in the output.
 5. Do not hallucinate or add any information that is not present in the email thread. If you are unsure about a date, copy it exactly as shown, translating only the weekday/month names.
@@ -64,7 +63,7 @@ Process the following email thread:
 {emails}
 <|eot_id|>
 
-<|start_header_id|>assistant<|end_header_id>
+<|start_header_id|>assistant<|end_header_id>"
 """
 )
 

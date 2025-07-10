@@ -44,26 +44,25 @@ class EmailInfo(BaseModel):
 parser = JsonOutputParser(pydantic_object=EmailInfo, json_compatible=True)
 
 prompt_template = PromptTemplate.from_template(
-"""<|begin_of_text|>
-<|start_header_id|>system<|end_header_id|>
-You are an expert assistant who processes email threads with precision and no loss of content.
-The input consists of several email strings. Some emails may be duplicates. Your task is:
-1. Split the email thread into individual emails using "***" as the only delimiter. Each "***" marks the end of one complete email.
-2. In the case were the email thread contains only one email, do not split the email thread.
-3. Return the unique emails **ONLY** as a JSON list, where each email is a **separate object** with the following fields:
+"""<|start_header_id|>system<|end_header_id|>
+You are an expert assistant that extracts structured information from email threads with no loss of content.
 
-- sender: The sender of the email. Store their name and email, if available, as a string in the format "Name <email@example.com>". If only a name is present, store it as "Name". Extract this after the "From:" field. 
-- sent: Extract the full date and time string in the following format: Full weekday name, full month name day, four-digit year, hour:minute:second AM/PM. Be carefull to not change the date or time.
-  If the date is not in English, translate it exactly to English without changing the date or time.
-- to: A list of recipients' names and emails, if available. Store each entry as a string in the format "Name <email@example.com>" or "Name". The "To" field may contain multiple recipients separated by commas or semicolons but is usually one.
-- cc: A list of additional recipients' names and emails. Store each entry as a string in the format "Name <email@example.com>" or "Name". The "Cc" field may contain multiple recipients separated by commas or semicolons.
-- subject: The subject of the email, stored as a string. Extract this after the "Subject:" field.
-- body: Include the full message text up to but not including the next delimiter "***". Do not include "**" in the body. Do not summarize or skip any content. If the body is empty, return an empty string.
+Split the input into individual emails:
+- Use "-***-" as a delimiter when present.
+- If missing, split based on headers like "From:", "Sent:", "To:", "Cc:", "Subject:", which may appear in other languages. Translate these headers to English before splitting.
 
-4. Maintain the chronological order of the emails in the output.
-5. Do not hallucinate or add any information that is not present in the email thread. If you are unsure about a date, copy it exactly as shown, translating only the weekday/month names.
-6. The length of the JSON list needs to be the same as the number of the emails strictly.
-7. Output ONLY the raw JSON array. Do NOT include extra quotes, explanations, or any text.
+Translate only the **header labels** to English. Do not change dates, times, or names. If month or weekday names are in another language, translate them to English without changing the date/time values.
+
+Return a JSON array where each email is an object with:
+- `sender`: Extract from "From:". Format as "Name <email@example.com>" or "Name".
+- `sent`: Extract from "Sent:". Keep the exact date/time but translate month/weekday names to English. Example: "Friday, March 22, 2024 05:19:00 PM".
+- `to`: List of recipients from "To:", formatted as "Name <email@example.com>" or "Name".
+- `cc`: Same as `to`, from "Cc:".
+- `subject`: Extract from "Subject:".
+- `body`: All text up to the next header or "-***-". Do not include "-***-" in the body.
+
+Maintain the order of emails as they appear.   
+Output only the **raw JSON array**, with no explanations or extra text.
 
 Process the following email thread:
 <|eot_id|>
@@ -96,7 +95,7 @@ class LLMPredictor:
     def __call__(self, chunk: List[str]) -> List[Dict]:
         """Generates structured outputs from email chunk."""
         
-        prompts = prompt_template.format(emails="\n***\n".join(chunk))
+        prompts = prompt_template.format(emails="\n-***-\n".join(chunk))
             
         with trace(
             name=f"actor_{ray.get_runtime_context().get_actor_id()}",
@@ -108,7 +107,9 @@ class LLMPredictor:
             },
         )as run:  
             try:                                  
-                raw, parsed = self.call_with_retry(prompts, max_retries=3) 
+                outputs_obj = self.llm.generate(prompts, self.sampling_params)
+                raw = outputs_obj[0].outputs[0].text
+                parsed = self.parser.parse(raw)
                 run.outputs={
                     "raw_outputs": raw,
                     "parsed_json": parsed
@@ -119,23 +120,7 @@ class LLMPredictor:
                 LOGGER.error(f"JSON parsing failed for chunk of size {len(chunk)}: {e}")
                 return []
             finally:
-                run.end()
-
-        def call_with_retry(self, prompts, max_retries=3, delay=2):
-            for attempt in range(1, max_retries + 1):
-                try:
-                    outputs_obj = self.llm.generate(prompts, self.sampling_params)
-                    raw = outputs_obj[0].outputs[0].text
-                    parsed = self.parser.parse(raw)
-                    return raw, parsed
-                except Exception as e:
-                    LOGGER.warning(f"Attempt {attempt} failed for chunk. Error: {e}")
-                    if attempt == max_retries:
-                        raise  # Re-raise on final failure
-                    else:
-                        import time
-                        time.sleep(delay * attempt) 
-        
+                run.end()        
 
 ray.init(ignore_reinit_error=True)
 
@@ -156,7 +141,6 @@ class RayLLMActor:
         idx, chunk = idx_and_chunk
         result = self.predictor(chunk)
         return idx, result
-
 
 def process_directory_distributed(dir_path: str) -> List[Dict]:
     """
@@ -208,7 +192,7 @@ def process_directory_distributed(dir_path: str) -> List[Dict]:
         ordered_results: List[Optional[List[Dict]]] = [None] * len(indexed_chunks)
 
         for idx, chunk in indexed_chunks:
-            pool.submit(lambda a, c: a.predict_with_index.remote(c), (idx,chunk))
+            pool.submit(lambda a, c: a.predict_with_index.remote(c), (idx, chunk))
 
         for _ in range(len(indexed_chunks)):
             try:
@@ -220,6 +204,7 @@ def process_directory_distributed(dir_path: str) -> List[Dict]:
         flattened_results = [email for batch in ordered_results if batch for email in batch]
 
         return flattened_results
+
     finally:
         for actor in actors:
             try:

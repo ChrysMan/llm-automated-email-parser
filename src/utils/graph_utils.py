@@ -50,18 +50,37 @@ def clean_data(text: str) -> str:
     clean_text = clean_text.replace("________________________________", "").replace("--", "").replace('"\'', '"').replace('\'"', '"')
     return clean_text
 
-def split_email_thread(text: str) -> list: 
+def split_email_thread(clean_text: str) -> list: 
     """ Separates the emails using the word "From" or "On...wrote:" as an indicator to separate. """
-    separator = re.compile(r"(?<=\n)\s*(From:|On .+ wrote:)", re.MULTILINE)
-    email_parts = re.split(separator, text)
-    email_parts = [part.strip() for part in email_parts if part.strip()]
-    formatted_parts = []
-    for i, part in enumerate(email_parts, 1):
-        if i % 2 ==1:
-            formatted_parts.append(f"{part}")
-        else:
-            formatted_parts[-1] += f"{part}"
-    return formatted_parts
+    separator = re.compile(r"^\s*(From:|On .+ wrote:)", re.MULTILINE)   
+    
+    # Find all occurrences of reply headers
+    matches = list(separator.finditer(clean_text))
+
+    # If no matches, return the whole email as one part
+    if not matches:
+        return [clean_text.strip()]
+
+    # Store the email parts
+    email_parts = []
+    prev_end = 0
+
+    for match in matches:
+        start = match.start()
+
+        # Get the section from the previous end up to this header
+        part = clean_text[prev_end:start].strip()
+        if part:
+            email_parts.append(part)
+
+        prev_end = start  # Next part starts from this header
+
+    # Add the last section of the email (from the last header to the end)
+    last_part = clean_text[prev_end:].strip()
+    if last_part:
+        email_parts.append(last_part)
+
+    return email_parts
 
 def find_best_chunk_size(total_emails, min_chunk, max_chunk):
     best_chunk = min_chunk
