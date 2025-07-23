@@ -47,22 +47,24 @@ prompt_template = PromptTemplate.from_template(
 """<|start_header_id|>system<|end_header_id|>
 You are an expert assistant that extracts structured information from email threads with no loss of content.
 
-Split the input into individual emails:
+1. Split the input into individual emails:
 - Use "-***-" as a delimiter when present.
 - If missing, split based on headers like "From:", "Sent:", "To:", "Cc:", "Subject:", which may appear in other languages. Translate these headers to English before splitting.
 
-Translate only the **header labels** to English. Do not change dates, times, or names. If month or weekday names are in another language, translate them to English without changing the date/time values.
+2. Translate only the **header labels** to English. Do not change dates, times, or names. If month or weekday names are in another language, translate them to English without changing the date/time values.
 
-Return a JSON array where each email is an object with:
+3. Return a JSON array where each email is an object with:
 - `sender`: Extract from "From:". Format as "Name <email@example.com>" or "Name".
 - `sent`: Extract from "Sent:". Keep the exact date/time but translate month/weekday names to English. Example: "Friday, March 22, 2024 05:19:00 PM".
 - `to`: List of recipients from "To:", formatted as "Name <email@example.com>" or "Name".
 - `cc`: Same as `to`, from "Cc:".
 - `subject`: Extract from "Subject:".
-- `body`: All text up to the next header or "-***-". Do not include "-***-" in the body.
+- `body`: All text up to the next header or "-***-". Do not include "-***-" in the body. If empty, return an empty string.
 
-Maintain the order of emails as they appear.   
-Output only the **raw JSON array**, with no explanations or extra text.
+4. Maintain the order of emails as they appear.   
+5. Do not hallucinate or add any information that is not present in the email thread. If you are unsure about a date, copy it exactly as shown, translating only the weekday/month names.
+6. The length of the JSON list needs to be the same as the number of the emails strictly.
+7. Output only the **raw JSON array**, with no explanations or extra text.
 
 Process the following email thread:
 <|eot_id|>
@@ -226,7 +228,8 @@ if __name__ == "__main__":
         LOGGER.error(f"{dir_path} is not a valid directory.")
         sys.exit(1)
 
-    model_tag = "meta-llama/Llama-3.1-8B-Instruct"
+    #model_tag = "meta-llama/Llama-3.1-8B-Instruct"
+    model_tag = "Qwen/Qwen2.5-7B-Instruct"
 
     try:
         email_data = process_directory_distributed(dir_path=dir_path)

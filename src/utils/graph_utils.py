@@ -1,4 +1,5 @@
 import extract_msg, re
+import json
 import math
 from utils.logging_config import LOGGER
 from typing import List, Tuple
@@ -18,6 +19,15 @@ def append_file(content, filename):
             f.write(str(content))
     except Exception as e:
         LOGGER.error(f"Failed to append at file {filename}: {e}")
+
+def read_json_file(filename:str) -> List[dict]:
+    """ Reads a JSON file and returns its content as a list of dictionaries """
+    try:
+        with open(filename, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        LOGGER.error(f"Failed to read JSON file {filename}: {e}")
+        return []
 
 def extract_msg_file(file_path) -> str:
     """ Returns the contents of the msg in a text format """
