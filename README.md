@@ -55,7 +55,6 @@ python email_preprocessing_async.py /path/to/your/data/directory
 python  email_preprocessing_vllm_unordered.py /path/to/your/data/directory                          
 # Create vector database with dedublicated email list 
 python create_embeddings.py
-                                                                        
 ```
 #### Note: 
 /path/to/your/data/directory should be replaced with the actual path where your `.msg` files are stored.
