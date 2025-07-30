@@ -61,7 +61,8 @@ You are an expert assistant that extracts structured information from email thre
 - `subject`: Extract from "Subject:".
 - `body`: All text up to the next header or "-***-". Do not include "-***-" in the body. If empty, return an empty string.
 
-4. Maintain the order of emails as they appear.   
+4. Maintain the order of emails as they appear.  
+5. Remove signatures, trackers, footers, metadata, and any other non-essential content from the body. Focus on the main content of the email. 
 5. Do not hallucinate or add any information that is not present in the email thread. If you are unsure about a date, copy it exactly as shown, translating only the weekday/month names.
 6. The length of the JSON list needs to be the same as the number of the emails strictly.
 7. Output only the **raw JSON array**, with no explanations or extra text.
