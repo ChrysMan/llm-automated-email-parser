@@ -12,11 +12,11 @@ tic = time()
 
 #model_name = "upskyy/bge-m3-korean"
 #model_name = "BAAI/bge-m3" 
-model_name = "Qwen/Qwen3-Embedding-0.6B"
+#model_name = "Qwen/Qwen3-Embedding-0.6B"
 #model_name = "Qwen/Qwen3-Embedding-4B"
 #model_name = "Qwen/Qwen3-Embedding-8B"
 #model_name = "Alibaba-NLP/gte-multilingual-base"
-
+model_name = "all-MiniLM-L6-v2"
 
 model = SentenceTransformer(
     model_name,
@@ -60,7 +60,7 @@ if partially_unique_emails:
 
     index = faiss.IndexFlatL2(vector_dimensions)              # Inner Product (dot product) index
     first_embedding = first_embedding.astype(np.float32)
-    #faiss.normalize_L2(first_embedding)                       # Normalize embeddings
+    #faiss.normalize_L2(first_embedding)                      # Normalize embeddings
     index.add(first_embedding)                                # Add embeddings to the index
     unique_emails.append(partially_unique_emails[0])          # Add the first email to the unique list
 
@@ -75,14 +75,16 @@ if partially_unique_emails:
         matched_index = Ind[0][0]                        # Get the index of the matched embedding
         matched_email = partially_unique_emails[matched_index]        # Get the matched email text
         
-        if similarity > 0.15:                            # If the similarity is above a threshold
-            email_embedding = model.encode(email, convert_to_numpy=True, normalize_embeddings=True)
-            email_embedding = np.array(email_embedding).reshape(1,-1)  
-            email_embedding = email_embedding.astype(np.float32)
-            index.add(email_embedding)                    # Add the new embedding to the index without the prompt query
-            unique_emails.append(email)
-        else:
-            print("\nSimilarity:", similarity, "\n\n\nOriginal Email:", email, "\n\n\nMatched Email:", matched_email)
+        #if similarity > 1:                            # If the similarity is above a threshold
+        email_embedding = model.encode(email, convert_to_numpy=True, normalize_embeddings=True)
+        email_embedding = np.array(email_embedding).reshape(1,-1)  
+        email_embedding = email_embedding.astype(np.float32)
+        index.add(email_embedding)                    # Add the new embedding to the index without the prompt query
+        unique_emails.append(email)
+        write_file(f"\nSimilarity: {similarity}\n\nOriginal Email: {email}\n\nMatched Email: {matched_email}\n\n\n", '/home/chryssida/DATA_TUC-KRITI/SEA IMPORT/231870/231870_results.txt')
+        #else:
+            #print("\nSimilarity:", similarity, "\n\n\nOriginal Email:", email, "\n\n\nMatched Email:", matched_email)
+        #    write_file(f"\nSimilarity: {similarity}\n\nOriginal Email: {email}\n\nMatched Email: {matched_email}\n\n\n", '/home/chryssida/DATA_TUC-KRITI/SEA IMPORT/231870/231870_results.txt')
 else:
     LOGGER.error("No partially unique emails found to process.")    
 

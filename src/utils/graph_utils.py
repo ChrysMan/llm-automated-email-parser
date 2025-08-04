@@ -54,15 +54,15 @@ Subject: {msg.subject}
 
 def clean_data(text: str) -> str:
     """ Cleans the text data by removing unnecessary spaces and new lines. """
-    clean_text = re.sub(r"^[ \t]+", "", text, flags=re.MULTILINE) 
-    clean_text = re.sub(r"\n\s*\n+", "\n\n", clean_text)
-    clean_text = re.sub(r"<image\d+\.(jpg|png)>", "", clean_text)
-    clean_text = clean_text.replace("________________________________", "").replace("--", "").replace('"\'', '"').replace('\'"', '"')
+    clean_text = text.replace("--", "").replace('"\'', '"').replace('\'"', '"').replace("：", ":")
+    clean_text = re.sub(r"<image\d+\.(jpg|png)>|re: *|回复: *|Σχετ.: *|__+", "", clean_text, flags=re.IGNORECASE)
+    clean_text = re.sub(r"^[ \t]+", "", clean_text, flags=re.MULTILINE) 
+    clean_text = re.sub(r"\n\s*\n*", "\n", clean_text)
     return clean_text
 
 def split_email_thread(clean_text: str) -> list: 
     """ Separates the emails using the word "From" or "On...wrote:" as an indicator to separate. """
-    separator = re.compile(r"^\s*(From:|On .+ wrote:)", re.MULTILINE)   
+    separator = re.compile(r"^(From:|发件人:|On .+ wrote:|Στις .+ έγραψε:)", re.MULTILINE)   
     
     # Find all occurrences of reply headers
     matches = list(separator.finditer(clean_text))
