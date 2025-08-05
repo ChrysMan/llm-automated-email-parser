@@ -53,16 +53,19 @@ Subject: {msg.subject}
     return msg_to_text
 
 def clean_data(text: str) -> str:
-    """ Cleans the text data by removing unnecessary spaces and new lines. """
+    """ Cleans the text data by removing unnecessary spaces, new lines and unecessary data. """
+    flags = re.MULTILINE | re.IGNORECASE
     clean_text = text.replace("--", "").replace('"\'', '"').replace('\'"', '"').replace("：", ":")
+    clean_text = re.sub(r"\s*<[^>]+>|\s>", "", clean_text)
     clean_text = re.sub(r"<image\d+\.(jpg|png)>|re: *|回复: *|Σχετ.: *|__+", "", clean_text, flags=re.IGNORECASE)
     clean_text = re.sub(r"^[ \t]+", "", clean_text, flags=re.MULTILINE) 
+    clean_text = re.sub(r"Tel\s*:\s*.+$|^(T|M)\s*:\s*\+*.+$|E(-)?mail\s*:.*$|Website\s*:.*$|Web\s*: .+$|Address\s*:.+$|Fax\s*:.+$|P\.*s\.*\s*:.+$|mob\.\+*.+\s*$|Mobile\s*:.+$|Note\s*:.*$|Phone\s*:\s*.*$|Disclaimer\s*:.+$|Στάλθηκε από το Ταχυδρομείο.+$|Sent from my.+$|地址\s*:.+$|分公司\s*:.+$", "", clean_text, flags=flags)
     clean_text = re.sub(r"\n\s*\n*", "\n", clean_text)
     return clean_text
 
 def split_email_thread(clean_text: str) -> list: 
-    """ Separates the emails using the word "From" or "On...wrote:" as an indicator to separate. """
-    separator = re.compile(r"^(From:|发件人:|On .+ wrote:|Στις .+ έγραψε:)", re.MULTILINE)   
+    """ Separates the emails using the word "From" or "On...wrote:" as an indicator to separate (English, Greek, Chinese, Russian, German, French, Italian, Spanish, Portuguese). """
+    separator = re.compile(r"^(From:|发件人:|De:|Von:|Da:|De:|От:|On .+ wrote:|Στις .+ έγραψε:|在 .+ 写道:|Le .+ a écrit:|Am .+ schrieb:|El .+ escribió:|Il .+ ha scritto:|Em .+ escreveu:|В .+ написал(а)?:)", re.MULTILINE)   
     
     # Find all occurrences of reply headers
     matches = list(separator.finditer(clean_text))

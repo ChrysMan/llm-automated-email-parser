@@ -1,14 +1,10 @@
 import os
 import extract_msg, re
-import talon
-talon.init()
-from talon import signature
-from datetime import datetime
 
-directory = "/home/chryssida/DATA_TUC-KRITI/AIR IMPORT/231630/"
-output_file = "/home/chryssida/src/Texts/231630_info.txt"
-output_file2 = "/home/chryssida/src/Texts/231630_cleaned.txt"
-output_file3 = "/home/chryssida/src/Texts/231630_split.txt"
+directory = "/home/chryssida/DATA_TUC-KRITI/TRUCK EXPORT/242492/"
+output_file = "/home/chryssida/src/Texts/TE-242492-info.txt"
+output_file2 = "/home/chryssida/src/Texts/TE-242492-cleaned.txt"
+output_file3 = "/home/chryssida/src/Texts/TE-242492-split.txt"
 
 
 def split_email_chain(clean_text):
@@ -87,9 +83,12 @@ except Exception as e:
 try:
     with open(f"{output_file2}", "w") as f:
         """ Cleans the text data by removing unnecessary spaces and new lines. """
+        flags = re.MULTILINE | re.IGNORECASE
         clean_text = msg_to_text.replace("--", "").replace('"\'', '"').replace('\'"', '"').replace("：", ":")
+        clean_text = re.sub(r"\s*<[^>]+>|\s>", "", clean_text)
         clean_text = re.sub(r"<image\d+\.(jpg|png)>|re: *|回复: *|Σχετ.: *|__+", "", clean_text, flags=re.IGNORECASE)
         clean_text = re.sub(r"^[ \t]+", "", clean_text, flags=re.MULTILINE) 
+        clean_text = re.sub(r"Tel\s*:\s*.+$|^(T|M)\s*:\s*\+*.+$|E(-)?mail\s*:.*$|Website\s*:.*$|Web\s*: .+$|Address\s*:.+$|Fax\s*:.+$|P\.*s\.*\s*:.+$|mob\.\+*.+\s*$|Mobile\s*:.+$|Note\s*:.*$|Phone\s*:\s*.*$|Disclaimer\s*:.+$|Στάλθηκε από το Ταχυδρομείο.+$|Sent from my.+$|地址\s*:.+$|分公司\s*:.+$", "", clean_text, flags=flags)
         clean_text = re.sub(r"\n\s*\n*", "\n", clean_text)
         
         f.write(clean_text)
@@ -99,7 +98,7 @@ except Exception as e:
 
 try:
     with open(f"{output_file3}", "a") as f:
-        separator = re.compile(r"^(From:|发件人:|On .+ wrote:|Στις .+ έγραψε:)", re.MULTILINE)
+        separator = re.compile(r"^(From:|发件人:|De:|Von:|Da:|De:|От:|On .+ wrote:|Στις .+ έγραψε:|在 .+ 写道:|Le .+ a écrit:|Am .+ schrieb:|El .+ escribió:|Il .+ ha scritto:|Em .+ escreveu:|В .+ написал(а)?:)", re.MULTILINE)
         email_parts = split_email_chain(clean_text)
 
         # Join them with your separator
@@ -109,17 +108,6 @@ try:
         print(f"Split email information has been exported to {output_file3}")
 except Exception as e:
     print(f"An error occurred while writing to the file: {e}")
-
-try:
-    #for email in email_parts:
-    text, signature = signature.extract(email_parts[1], sender='Eleftheria Gkoulta')
-    if signature:
-        print(text + "\n")
-        print(f"Signature found in email: {signature}")
-    else:
-        print("No signatures found in this email.")
-except Exception as e:
-    print(f"An error occurred while processing the email signatures: {e}")
 
 
 
