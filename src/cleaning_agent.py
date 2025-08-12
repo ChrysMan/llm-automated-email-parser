@@ -148,33 +148,7 @@ def next_power_of_two(x: int) -> int:
     return 1 << (x - 1).bit_length()
 
 if __name__ == "__main__":
-    email_text = """Στις Τρίτη, Μαΐου 30, 2023, 11:23 πμ, ο χρήστης Marina Koletzaki έγραψε:
-Καλησπερα Κε Κουτσουβαλα,
-Πως ειστε ?
-Λαβαμε ενημερωση για ένα νέο φορτιο αεροπορικο ως παρακατω.
-Πειτε μου εάν το προχωραμε .
-We got a booking for M.IOANNO, below is the details, pls let me know if we can go ahead, thanks.
-S/DALIAN GOLDEN-CAT
-C/M.IOANNO
-FOB Term
-22ctns/212kgs/0.6cbm
-Ready date is on 30TH MAY
-From DLC to ATH
-CA: via BJS, from BJS to ATH is directly service, D3,7/WEEK
-+100KGS: USD3.62/kg all-in (spot rate for dense cargo 1cbm>300kgs)
-QR: via BJS and DOH
-+100KGS: USD3.97/kg all-in
-The cost cannot be locked, any change will send to you.
-Επισης και τα τοπικα Ελλαδος παρακατω : 
-*	Δικ.διατακτικης : 35 ευρω
-*	Πρακτορειακα : 45 ευρω
-Εν αναμονη απαντησης σας.
-Best regards
-Marina Koletzaki (Mrs.)
-Operation manager
-Arian Maritime S.A.
-133Α Filonos street | Piraeus-Greece 18536
-"""
+    email_text = """Your email goes here"""
 
     cleaned = clean_email(email_text)
     print(cleaned)
