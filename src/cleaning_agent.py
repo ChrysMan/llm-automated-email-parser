@@ -1,15 +1,10 @@
-import json, os, sys
-import ray
-import traceback
+import os
 from time import time
-from ray.util.actor_pool import ActorPool
-from langsmith import trace, Client, traceable
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, pipeline
-from langchain_core.prompts import PromptTemplate
-from typing import Optional, List, Dict, Tuple
-from pydantic import BaseModel, Field
+from langsmith import traceable
+from transformers import AutoTokenizer, AutoModelForCausalLM
 from utils.logging_config import LOGGER
-from utils.graph_utils import write_file, append_file, clean_data
+from utils.graph_utils import clean_data
+from utils.prompts import create_FewShotPrompt, cleaning_examples, cleaning_prefix
 
 langsmith_api_key = os.environ.get("LANGSMITH_API_KEY")
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
@@ -18,103 +13,29 @@ os.environ["LANGSMITH_PROJECT"] = "email_cleaning"
 if not langsmith_api_key:
     LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
 
-prompt = PromptTemplate.from_template(
-"""<|start_header_id|>system<|end_header_id|>
-You are an email cleaning agent. You have two tasks:
-1. For the fields "From:", "To:", "Cc:":
-    - Whatever format you choose for one field must be strictly applied to the rest of the fields, separated by semicolons.
-    - If any field contains only a name, keep only the name.
-    - If any field contains an email address, keep only the email address.
-    - If they contain both a name and an email address, keep only the email address.
-    - If the name contains apostrophes ("'") remove them.
-
-2. Remove all the information that follow after the **signature name line**. 
-    - The signature block starts with phrases like "Best regards", "Thanks and Best regards", "Kind regards", "Sincerely", "Yours faithfully", "Ευχαριστώ", "Ευχαριστώ πολύ", "Με εκτίμηση" or something similar.
-    - After this phrase, keep only the very next line if it contains the sender’s name.
-    - Delete everything that appears after that name line — including phone numbers, job titles, company names, addresses, disclaimers, antivirus messages, or blank lines.
-
----Important Rules---
-* *DO NOT* hallucinate or add any information that is not present in the email.
-* Output only the email text without any additional formatting or explanations. 
-* The output should start with "From:" and end with the name of the sender followed by the phrase "---End of email---" once *strictly*.
-
----Example 1---
-Input:
-    From: John Doe <jdoe@email.com <mailto:jdoe@email.com>>
-    To: Mary Joe 
-    Cc: Sales Department 
-    Subject: Upcoming Shipment
-    Hello Mary,
-    This is to inform you about the upcoming shipment.
-    Best regards
-    John Doe
-    Export Manager
-    Company XYZ Ltd.
-    This email has been scanned by XYZ AntiVirus.
-
-Output:
-    From: John Doe
-    To: Mary Joe
-    Cc: Sales Department
-    Subject: Upcoming Shipment
-    Hello Mary,
-    This is to inform you about the upcoming shipment.
-    Best regards
-    John Doe 
-    ---End of email---
-
----Example 2---
-Input:
-    Στις Τρίτη, Μαΐου 30, 2023, 11:23 πμ, ο χρήστης Maria Doe <mdoe@email.com> έγραψε:
-    Καλησπερα Κε Πετρόπουλε,
-    Πως ειστε ?
-    Λαβαμε ενημερωση για ένα νέο φορτιο.
-    Best regards
-    Maria Doe (Mrs.)
-    Operation manager
-    Company Name S.A.
-    23B Oxford street | London-England 64336
-
-Output:
-    Στις Τρίτη, Μαΐου 30, 2023, 11:23 πμ, ο χρήστης mdoe@email.com έγραψε:
-    Καλησπερα Κε Πετρόπουλε,
-    Πως ειστε ?
-    Λαβαμε ενημερωση για ένα νέο φορτιο.
-    Best regards
-    Maria Doe (Mrs.)
-    ---End of email---
-
-Process the following email:
-<|eot_id|>
-
-<|start_header_id|>user<|end_header_id|>
-{email}
-<|eot_id|>
-
-<|start_header_id|>assistant<|end_header_id>
-"""
-)
-
 model_name = "Qwen/Qwen2.5-7B-Instruct"
 
 model = AutoModelForCausalLM.from_pretrained(
     model_name,
     torch_dtype="float16",
-    device_map="cuda:2"
+    device_map="cuda:0"
 )
 
 tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+cleaning_prompt = create_FewShotPrompt(cleaning_examples, cleaning_prefix)
 
 @traceable(name="SE-230054-7")
 def clean_email(email_text:str) -> str:
     """Cleans the email text by removing unnecessary information and formatting."""
     try:
         # Prepare the prompt
-        prompt_text = prompt.format(email=email_text)
+        prompt_text = cleaning_prompt.format(email=email_text)
+        print("Prompt text:\n", prompt_text)
 
         # Tokenize
         input = tokenizer(prompt_text, return_tensors="pt")
-        input = input.to("cuda:2")  # Move to the correct device
+        input = input.to("cuda:0")  # Move to the correct device
 
         token_ids = tokenizer.encode(email_text)
         token_count = len(token_ids)
@@ -148,7 +69,6 @@ def next_power_of_two(x: int) -> int:
     return 1 << (x - 1).bit_length()
 
 if __name__ == "__main__":
-    email_text = """Your email goes here"""
-
+    email_text = """Your email text goes here."""
     cleaned = clean_email(email_text)
     print(cleaned)
