@@ -1,10 +1,10 @@
 import os
 import extract_msg, re
 
-directory = "/home/chryssida/DATA_TUC-KRITI/SEA EXPORT/230054/"
-output_file = "/home/chryssida/src/Texts/SE-230054-info.txt"
-output_file2 = "/home/chryssida/src/Texts/SE-230054-cleaned.txt"
-output_file3 = "/home/chryssida/src/Texts/SE-230054-split.txt"
+directory = "/home/chryssida/DATA_TUC-KRITI/SEA IMPORT/234107/"
+output_file = "/home/chryssida/src/Texts/SI-234107-info.txt"
+output_file2 = "/home/chryssida/src/Texts/SI-234107-cleaned.txt"
+output_file3 = "/home/chryssida/src/Texts/SI-234107-split.txt"
 
 
 def split_email_chain(clean_text):
@@ -87,6 +87,7 @@ try:
         clean_text = msg_to_text.replace("--", "").replace('"\'', '"').replace('\'"', '"').replace("：", ":")
         clean_text = re.sub(r"<image\d+\.(jpg|png)>|re: *|回复: *|Σχετ.: *|__+", "", clean_text, flags=re.IGNORECASE)
         clean_text = re.sub(r"^[ \t]+", "", clean_text, flags=re.MULTILINE) 
+        clean_text = re.sub(r"^Date: ", "Sent: ", clean_text, flags=re.MULTILINE) 
         clean_text = re.sub(r"Tel\s*:\s*.+$|^(T|M)\s*:\s*\+*.+$|E(-)?mail\s*:.*$|Website\s*:.*$|Web\s*: .+$|Address\s*:.+$|Fax\s*:.+$|P\.*s\.*\s*:.+$|mob\.\+*.+\s*$|Mobile\s*:.+$|Note\s*:.*$|Phone\s*:\s*.*$|Disclaimer\s*:.+$|Στάλθηκε από το Ταχυδρομείο.+$|Sent from my.+$|地址\s*:.+$|分公司\s*:.+$", "", clean_text, flags=flags)
         clean_text = re.sub(r"\n\s*\n*", "\n", clean_text)
         
