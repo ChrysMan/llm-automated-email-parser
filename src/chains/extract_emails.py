@@ -29,7 +29,7 @@ class EmailInfo(BaseModel):
     to: Optional[List[str]] = Field(default_factory=list, description="A list o recipients' names and emails.")
     cc: Optional[List[str]] = Field(default_factory=list, description="A list of additional recipients' names and emails.")
     subject: Optional[str] = Field(None, description="The subject of the email.")
-    body: str = Field(..., description="The email body, excluding unnecessary whitespace.")
+    body: str = Field(..., description="The email body")
 
 local_model = OllamaLLM(model="llama3.1",temperature=0, num_ctx=8192, num_predict=4096, num_gpu=1, stop=["<|eot_id|>"])
 
