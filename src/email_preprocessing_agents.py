@@ -1,10 +1,13 @@
 import json, os, sys
 from time import time
+
+import torch
 from utils.logging_config import LOGGER
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from utils.graph_utils import extract_msg_file, clean_data, split_email_thread, chunk_emails,find_best_chunk_size
 from agents.cleaning_agent import clean_email_llm
 from agents.extraction_agent import extract_email_llm
+from utils.prompts import headers_cleaning_prompt, signature_cleaning_prompt, extraction_prompt
 
 if __name__ == "__main__":
 
@@ -26,12 +29,14 @@ if __name__ == "__main__":
     #model_tag = "meta-llama/Llama-3.1-8B-Instruct"
     model_name = "Qwen/Qwen2.5-7B-Instruct"
 
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         torch_dtype="float16",
         attn_implementation="sdpa",
-        device_map="auto"
-    )
+        #device_map="auto"
+    ).to(device)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
@@ -52,18 +57,26 @@ if __name__ == "__main__":
                 continue
 
             try:
+                count = 0
                 for email in splitted_emails:
-                    cleaned_email = clean_email_llm(email, tokenizer=tokenizer, model=model)
-                    email_info = extract_email_llm(cleaned_email, tokenizer=tokenizer, model=model)
+                    count += 1
+                    cleaned_signatures_email = clean_email_llm(email, signature_cleaning_prompt, model, tokenizer,trace_name=f"{filename}_{count}_signatures", device=device)
+                    cleaned_headers_email = clean_email_llm(cleaned_signatures_email, headers_cleaning_prompt, model, tokenizer, trace_name=f"{filename}_{count}_headers", device=device)
+                    email_info = extract_email_llm(cleaned_headers_email, extraction_prompt, model, tokenizer, trace_name=f"{filename}_{count}", device=device)
+                    #print(f"\n\nEmail Info {count} from {filename}: {cleaned_headers_email}")
                     email_data.append(email_info)
             except Exception as e:
                 LOGGER.error(f"Failed to clean or extract email from {filename}: {e}")
                 continue
 
             LOGGER.info(f"Time taken to process {filename}: {time() - tic2} seconds")
-            
-        with open(output_path, "w", encoding="utf-8") as file:
-            json.dump(email_data, file, indent=4, ensure_ascii=False, default=str)
+        
+    #partially_unique_emails = list(set(email_data))
+    #print("\nLength of emails before set", len(email_data))
+    #print("\nLength of emails after set", len(partially_unique_emails))
+    
+    with open(output_path, "w", encoding="utf-8") as file:
+        json.dump(email_data, file, indent=4, ensure_ascii=False, default=str)
 
-        LOGGER.info(f"Time taken to process: {time() - tic1} seconds")
-      
+    LOGGER.info(f"Time taken to process: {time() - tic1} seconds")
+    

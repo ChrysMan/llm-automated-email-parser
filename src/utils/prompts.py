@@ -44,7 +44,7 @@ For the field "Sent:":
 
     
 Important Rules:
-- Copy body text exactly, no changes. 
+- Copy body text exactly, no changes, not even in the formatting. 
 - Do NOT hallucinate or add info.  
 - Output must start with "From:" and end with sender name + "\n---End of email---".
 
@@ -109,7 +109,7 @@ Remove all the information that follow after the **signature name line**:
 3. Delete everything that appears after that name line, including phone numbers, job titles, company names, addresses, disclaimers, antivirus messages, or blank lines.
 
 Important Rules:
-- Copy body text exactly, no changes. 
+- Copy body text exactly, no changes, not even in the formatting. 
 - Do NOT hallucinate or add info.  
 - Output must start with "From:" and end strictly with the greeting + "\n" + senders' name + "\n---End of email---".
 
@@ -150,11 +150,10 @@ Process the following email:
 """
 )
 
-extraction_prompt = PromptTemplate.from_template(
-"""<|start_header_id|>system<|end_header_id|>
+extraction_prompt = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
 You are an expert assistant who processes emails with precision and no loss of content.
 The input consists of an email. Your task is:
-1. Extract the email thread from the input and return email **ONLY** as a JSON object, with the following fields:
+1. Return the email from the input and return email **ONLY** as a valid JSON object, with the following fields:
 
 - sender: The sender of the email. Extract this after the "From:" field. 
 - sent: Extract the full date and time string. 
@@ -164,15 +163,41 @@ The input consists of an email. Your task is:
 - body: Include the full message text up to the senders' name in the signature. Do not summarize or skip any content. If the body is empty, return an empty string.
 
 2. Some email headers may be in different languages, such as Chinese or Russian. Translate the headers to English without changing the date or time.
-3. Do not hallucinate or add any information that is not present in the email thread. If you are unsure about a date, copy it exactly as shown, translating only the weekday/month names.
+3. Do not hallucinate or change or add or any information that is not present in the email thread. If you are unsure about a date, copy it exactly as shown, translating only the weekday/month names.
 4. Do NOT include extra quotes, explanations, or any text.
+5. Output ONLY the raw JSON object. Do NOT include extra quotes, explanations, or any text.
 
-Process the following email thread:
+Example:
+Input:
+From: johndoe@gmail.com
+Date: Friday, December 29, 2023 2:09 PM
+To: 刘业; Hara Papadopoulou
+Cc: 
+Subject: Upcoming Shipment
+Hello Mary,
+This is to inform you about the upcoming shipment.
+Thanks and Best regards
+John
+
+Output:
+{{
+    "sender": "johndoe@gmail.com",
+    "sent": "Friday, December 29, 2023 2:09 PM",
+    "to": [
+            "刘业", 
+            "Hara Papadopoulou"
+    ],
+    "cc": [],
+    "subject": "Upcoming Shipment",
+    "body": "Hello Mary,\nThis is to inform you about the upcoming shipment.\nThanks and Best regards\nJohn"
+}}
+
+Process the following email:
 <|eot_id|>
 <|start_header_id|>user<|end_header_id|>
 {email}
 <|eot_id|>
-<|start_header_id|>assistant<|end_header_id>
+<|start_header_id|>assistant<|end_header_id>   
 """
 )
 
@@ -226,6 +251,5 @@ def create_FewShotPrompt(examples: list, prefix: str):
         prefix=prefix,
         suffix=""""""Process the following email:\n{email}<|eot_id|>\n<|start_header_id|>assistant<|end_header_id>"""""",
         input_variables=["email"]
-    
 
 """
