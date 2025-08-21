@@ -64,7 +64,7 @@ def clean_data(text: str) -> str:
     clean_text = re.sub(r"^抄送人:", "Cc: ", clean_text, flags=re.MULTILINE)
     clean_text = re.sub(r"^主题:", "Subject: ", clean_text, flags=re.MULTILINE)
     clean_text = re.sub(r"^Date:", "Sent:", clean_text, flags=re.MULTILINE) 
-    clean_text = re.sub(r"Tel\s*:\s*.+$|^(T|M)\s*:\s*\+*.+$|E(-)?mail\s*:.*$|Website\s*:.*$|Web\s*: .+$|Address\s*:.+$|Fax\s*:.+$|P\.*s\.*\s*:.+$|mob\.\+*.+\s*$|Mobile\s*:.+$|Note\s*:.*$|Phone\s*:\s*.*$|Disclaimer\s*:.+$|Στάλθηκε από το Ταχυδρομείο.+$|Sent from my.+$|地址\s*:.+$|分公司\s*:.+$|This message is sent from my mob* device", "", clean_text, flags=flags)
+    clean_text = re.sub(r"Tel\s*:\s*.+$|^(T|M)\s*:\s*\+*.+$|^E(-)?mail\s*:.*$|Website\s*:.*$|Web\s*: .+$|Address\s*:.+$|Fax\s*:.+$|P\.*s\.*\s*:.+$|mob\.\+*.+\s*$|Mobile\s*:.+$|^Note\s*:.*$|Phone\s*:\s*.*$|Disclaimer\s*:.+$|^Στάλθηκε από το Ταχυδρομείο.+$|^Sent from my.+$|地址\s*:.+$|分公司\s*:.+$|This message is sent from my mob* device", "", clean_text, flags=flags)
     clean_text = re.sub(r"\n\s*\n*", "\n", clean_text)
     return clean_text
 
