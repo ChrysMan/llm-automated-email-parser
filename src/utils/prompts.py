@@ -27,8 +27,69 @@ example_prompt = PromptTemplate(
     template=example_template
 )
 
-translator_formatting_prompt = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
-Your are an email translator and formatting agent. Your task is to translate accurately the email in English (strictly)
+translator_prompt_qwen = """You are an email text translation agent. Your task is to:
+- Translate the non-English parts of the email text into English, keeping the rest exactly the same.
+- Do not modify dates, numbers, or email headers.
+- Preserve all original formatting (line breaks, spacing, etc.).
+- Do not include any Greek or Chinese text in the output.
+- The output must start with "From:" and end with the end of the email body. Do not duplicate the ending phrase."
+
+Example:
+Input:
+发件人:  约翰·多伊 <jdoe@email.com >
+发送日期: Δευτέρα, 18 Δεκεμβρίου 2023 9:10 πμ
+收件人: Mary Joe; harapap@gmail.com
+Cc:
+主题: Upcoming Shipment
+Goodmorning Mr Papadopoulos,
+Λάβαμε μια ενημέρωση σχετικά με μια νέα αποστολή.
+We received an update about a new shipment.
+Best regards
+John Doe 
+提单一律寄顺丰到付，开票只能开0税率电子发票，均不能抵扣.
+
+Output:
+From:  John Doe <jdoe@email.com >
+Sent: Monday, December 18, 2023 9:10 AM
+To: Mary Joe; harapap@gmail.com
+Cc:
+Subject: Upcoming Shipment
+Body: Goodmorning Mr Papadopoulos,
+We received an update about a new shipment.
+We received an update about a new shipment.
+Best regards
+John Doe 
+All bills of lading must be sent by SF Express to be paid on delivery. Only 0-tax electronic invoices can be issued for invoicing, and no deductions are allowed.
+"""
+
+translator_prompt_Llama = PromptTemplate.from_template("""### Instruction:
+You are an email translation agent. You will be inputted an email that is part English and part another language. Your job is to keep the email **exactly the same**, except that Greek and Chinese or other language (except English) text segments must be translated into English.
+- Copy all English text exactly as it is. Do not paraphrase, rewrite, or invent content.
+- Only replace the non-English parts (Greek or Chinese or other) with their English translation in the same position.
+- Preserve all headers, punctuation, spacing, line breaks, and formatting exactly.
+                                                            
+### Input:
+{email}
+### Response:
+""" 
+)
+
+translator_prompt_template = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
+You are an email translation agent. You will be inputted an email that is part English and part another language. Your job is to keep the email **exactly the same**, except that Greek and Chinese or other language (except English) text segments must be translated into English.
+- Copy all English text exactly as it is. Do not paraphrase, rewrite, or invent content.
+- Only replace the non-English parts (Greek or Chinese or other) with their English translation in the same position.
+- Preserve all headers, punctuation, spacing, line breaks, and formatting exactly.
+- Output must start with "From:" and end with "\n---End of email---".
+                                                            
+Process the following email:
+<|eot_id|>
+<|start_header_id|>user<|end_header_id|>
+{email}
+<|eot_id|>
+<|start_header_id|>assistant<|end_header_id>""" 
+)
+
+translator_formatting_prompt2 = """Your are an email translator and formatting agent. Your task is to translate accurately the email into English (strictly)
 and format the email.
 
 Rules:
@@ -40,9 +101,8 @@ Rules:
 "Cc: " + The Cc of the email, if they exist.
 "Subject: " + The subject of the email, if it exists.
 "Body: " + The body of the email, if it exists.
-
-3. Copy the translated information to the fields exactly as shown in the inputted email.                                                                                                            
-4. Output must start with "From:" and end with "\n---End of email---".
+                                                                                                     
+3. Output must start with "From:".
 
 Example 1:
 Input:
@@ -67,7 +127,6 @@ We received an update about a new shipment.
 Best regards
 John Doe 
 All bills of lading must be sent by SF Express to be paid on delivery. Only 0-tax electronic invoices can be issued for invoicing, and no deductions are allowed.
----End of email---
 
 Example 2: 
 Input:
@@ -91,15 +150,7 @@ Kind regards
 Mairy Doe (Ms.)
 Export Manager
 Company XYZ Ltd.
----End of email---
-                                                 
-Process the following email:
-<|eot_id|>
-<|start_header_id|>user<|end_header_id|>
-{email}
-<|eot_id|>
-<|start_header_id|>assistant<|end_header_id>  
-""")
+"""
 
 formatting_headers_prompt = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
 You are an email formatting agent. Your task is to format and translate email headers while preserving the body.

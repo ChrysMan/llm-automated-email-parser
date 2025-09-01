@@ -1,7 +1,10 @@
-import os, json
+import os
 import torch
+from dotenv import load_dotenv
 
-langsmith_api_key = os.environ.get("LANGSMITH_API_KEY")
+load_dotenv()
+
+langsmith_api_key = os.getenv("LANGSMITH_API_KEY")
 if langsmith_api_key:
     os.environ["LANGCHAIN_TRACING_V2"] = "true"
     os.environ["LANGCHAIN_ENDPOINT"]="https://api.smith.langchain.com"
@@ -19,7 +22,6 @@ from utils.graph_utils import clean_data
 client = Client()
 
 parser = JsonOutputParser(pydantic_object=EmailInfo, json_compatible=True)
-
 
 @traceable
 def clean_email_llm(email_text:str, prompt, model:AutoModelForCausalLM, tokenizer: AutoTokenizer, trace_name:str, device:torch.device) -> str:
@@ -39,26 +41,20 @@ def clean_email_llm(email_text:str, prompt, model:AutoModelForCausalLM, tokenize
             input = tokenizer(prompt_text, return_tensors="pt")
             input = input.to('cuda')  # Move to the correct device
 
-            token_ids = tokenizer.encode(email_text)
-            token_count = len(token_ids)
+            assert input['input_ids'].max() < model.config.vocab_size, f"Token ID exceeds model vocab size: {input['input_ids'].max()}, {model.config.vocab_size}"
 
-            # Calculate max_new_tokens based on the token count. Ensure it is a power of two.
-            if token_count <= 0:
-                max_new_tokens =  1
-            max_new_tokens = 1 << (token_count - 1).bit_length()
-            
             # Generate the cleaned email text
             cleaned_email = model.generate(
                 input_ids=input['input_ids'],
                 attention_mask=input['attention_mask'],
-                max_new_tokens=max_new_tokens,
+                max_new_tokens=input['input_ids'].shape[-1],
                 do_sample=False,
                 pad_token_id = tokenizer.eos_token_id
             )
-            
+
             # Decode the generated text
             cleaned_email_text = tokenizer.decode(cleaned_email[0], skip_special_tokens=False)
-
+            #print(cleaned_email_text)
             # Extract the relevant part of the response
             real_response = cleaned_email_text.split("<|start_header_id|>assistant<|end_header_id>")[-1].split("---End of email---")[0].strip()
             cleaned_response = clean_data(real_response)
@@ -72,7 +68,7 @@ def extract_email_llm(email_text: str, prompt, model:AutoModelForCausalLM, token
     """Extracts email information using a language model."""
     try:
         with trace(
-                name=f"{trace_name}_generation",
+                name=f"{trace_name}",
                 metadata={
                     "model_name": model.name_or_path
                 }
@@ -83,15 +79,12 @@ def extract_email_llm(email_text: str, prompt, model:AutoModelForCausalLM, token
             # Tokenize
             input = tokenizer(prompt_text, return_tensors="pt")
             input = input.to(device)  # Move to the correct device
-
-            token_ids = tokenizer.encode(email_text)
-            token_count = len(token_ids)
             
             # Generate the email information
             generated = model.generate(
                 input_ids=input['input_ids'],
                 attention_mask=input['attention_mask'],
-                max_new_tokens=token_count+128,
+                max_new_tokens=input['input_ids'].shape[-1],
                 do_sample=False,
                 pad_token_id=tokenizer.eos_token_id
             )
@@ -107,11 +100,11 @@ def extract_email_llm(email_text: str, prompt, model:AutoModelForCausalLM, token
             #real_response = generated_text.split("<|eot_id|>")[0].strip()
 
         with trace(
-            name=f"{trace_name}_parsing",
+            name=f"{trace_name}",
             inputs={"prompt": generated_text},
             metadata={
                 "model_name": model.name_or_path,
-                "max_new_tokens": token_count + 128,
+                "max_new_tokens": input['input_ids'].shape[-1],
                 "generated_text_length": len(generated_text)
             }
         ):

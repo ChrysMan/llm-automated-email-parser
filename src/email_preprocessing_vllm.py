@@ -13,19 +13,22 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 from utils.logging_config import LOGGER
 from utils.graph_utils import split_for_gpus_dynamic, extract_msg_file, append_file, chunk_emails, clean_data, split_email_thread
+from dotenv import load_dotenv
 
 assert Version(ray.__version__) >= Version(
     "2.22.0"), "Ray version must be at least 2.22.0"
 
+load_dotenv()
+hf_token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
+langsmith_api_key = os.getenv("LANGSMITH_API_KEY")
 client = Client()
 
-langsmith_api_key = os.environ.get("LANGSMITH_API_KEY")
-os.environ["LANGCHAIN_TRACING_V2"] = "true"
-os.environ["LANGCHAIN_ENDPOINT"]="https://api.smith.langchain.com"
 #os.environ["LANGCHAIN_PROJECT"] = "extract_emails_vllm"
-if not langsmith_api_key:
+if langsmith_api_key:
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_ENDPOINT"]="https://api.smith.langchain.com"
+else:
     LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
-    
 
 # Set tensor parallelism per instance.
 tensor_parallel_size = 1

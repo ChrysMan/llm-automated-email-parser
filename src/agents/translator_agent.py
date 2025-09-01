@@ -48,12 +48,13 @@ def translate_email_llm(email_text: str, prompt:str, model:AutoModelForCausalLM,
                 return_tensors="pt",
             ).to(model.device)
             
-            print(f"Token ID: {inputs["input_ids"].max()}, model vocab size:  {model.config.vocab_size}")
+            #print(f"Token ID: {inputs["input_ids"].max()}, model vocab size:  {model.config.vocab_size}")
             #assert inputs["input_ids"].max() < model.config.vocab_size, f"Token ID exceeds model vocab size: {inputs["input_ids"].max()}, {model.config.vocab_size}"
-            outputs = model.generate(**inputs, do_sample=False, max_new_tokens=min(inputs["input_ids"].shape[-1], 4096)) #inputs["input_ids"].shape[-1]
+            outputs = model.generate(**inputs, do_sample=False, max_new_tokens=inputs["input_ids"].shape[-1]) #inputs["input_ids"].shape[-1]
             output = tokenizer.decode(outputs[0][inputs["input_ids"].shape[-1]:], skip_special_tokens=True)
-            cleaned_response = clean_data(output)
-            return cleaned_response
+            #output = "From: "+ output.split("From:", 1)[1].strip() if "From:" in output else output.strip()
+            #cleaned_response = clean_data(output)
+            return output
     except Exception as e:
         LOGGER.error(f"Error translating email: {e}")
         return ""  # Return original if error occurs

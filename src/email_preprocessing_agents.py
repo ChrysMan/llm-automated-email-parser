@@ -6,12 +6,15 @@ from utils.logging_config import LOGGER
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from utils.graph_utils import extract_msg_file, clean_data, split_email_thread
 from agents.preprocessing_agent import extract_email_llm,clean_email_llm
-from utils.prompts import headers_cleaning_prompt, signature_cleaning_prompt, extraction_prompt
+from agents.translator_agent import translate_email_llm
+from utils.prompts import translator_prompt_qwen, headers_cleaning_prompt, signature_cleaning_prompt,extraction_prompt
 
 if __name__ == "__main__":
 
     tic1 = time()
 
+    hf_token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
+    
     if len(sys.argv) != 2:
         LOGGER.error("Usage: python emailParsing.py <dir_path>")
         sys.exit(1)
@@ -27,17 +30,28 @@ if __name__ == "__main__":
 
     #model_tag = "meta-llama/Llama-3.1-8B-Instruct"
     model_name = "Qwen/Qwen2.5-7B-Instruct"
+    model_name2 = "LuvU4ever/qwen2.5-3b-qlora-merged-v4"
 
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    device0 = "cuda:0" if torch.cuda.is_available() else "cpu"
+    device1 = "cuda:1" if torch.cuda.is_available() else "cpu"
     
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         torch_dtype="float16",
         attn_implementation="sdpa",
-        #device_map="auto"
-    ).to(device)
+        device_map="auto"
+    ).to(device0)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+    model2 = AutoModelForCausalLM.from_pretrained(
+        model_name2,
+        torch_dtype=torch.float16,
+        attn_implementation="sdpa",
+        #device_map="auto",
+    ).to(device1)
+
+    tokenizer2 = AutoTokenizer.from_pretrained(model_name2)
 
     email_data = []
 
@@ -59,11 +73,12 @@ if __name__ == "__main__":
                 count = 0
                 for email in splitted_emails:
                     count += 1
-                    cleaned_signatures_email = clean_email_llm(email, signature_cleaning_prompt, model, tokenizer,trace_name=f"{filename}_{count}_signatures", device=device)
-                    cleaned_headers_email = clean_email_llm(cleaned_signatures_email, headers_cleaning_prompt, model, tokenizer, trace_name=f"{filename}_{count}_headers", device=device)
-                    email_info = extract_email_llm(cleaned_headers_email, extraction_prompt, model, tokenizer, trace_name=f"{filename}_{count}", device=device)
+                    translated_email = translate_email_llm(email, prompt=translator_prompt_qwen, model=model2, tokenizer=tokenizer2, trace_name=f"translate_{filename}_{count}", device=device1)
+                    cleaned_from_signatures = clean_email_llm(translated_email, prompt=signature_cleaning_prompt, model=model, tokenizer=tokenizer, trace_name=f"clean_sigantures_{filename}_{count}", device=device0)
+                    cleaned_from_headers = clean_email_llm(cleaned_from_signatures, prompt=headers_cleaning_prompt, model=model, tokenizer=tokenizer, trace_name=f"clean_headers_{filename}_{count}", device=device0)
+                    extracted_info = extract_email_llm(cleaned_from_headers, prompt=extraction_prompt, model=model, tokenizer=tokenizer, trace_name=f"extract_{filename}_{count}", device=device0)
                     #print(f"\n\nEmail Info {count} from {filename}: {cleaned_headers_email}")
-                    email_data.append(email_info)
+                    email_data.append(extracted_info)
             except Exception as e:
                 LOGGER.error(f"Failed to clean or extract email from {filename}: {e}")
                 continue

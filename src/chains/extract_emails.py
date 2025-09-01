@@ -13,12 +13,16 @@ from typing import Optional, List, Dict, Tuple
 from time import time
 from utils.logging_config import LOGGER
 from utils.graph_utils import extract_msg_file, clean_data, split_email_thread, chunk_emails,find_best_chunk_size
+from dotenv import load_dotenv
 
+load_dotenv()
 
-langsmith_api_key = os.environ.get("LANGSMITH_API_KEY")
-os.environ["LANGCHAIN_TRACING_V2"] = "true"
-os.environ["LANGCHAIN_ENDPOINT"]="https://api.smith.langchain.com"
-if not langsmith_api_key:
+hf_token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
+langsmith_api_key = os.getenv("LANGSMITH_API_KEY")
+if langsmith_api_key:
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_ENDPOINT"]="https://api.smith.langchain.com"
+else:
     LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
 
 
