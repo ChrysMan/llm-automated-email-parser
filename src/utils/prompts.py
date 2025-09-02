@@ -153,18 +153,20 @@ Company XYZ Ltd.
 """
 
 formatting_headers_prompt = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
-You are an email formatting agent. Your task is to format and translate email headers while preserving the body.
+You are an email formatting agent. Your task is to reformat the input email into a structured form without altering any content except for the "Sent" date, which must be reformatted.
 
-1. Format the email headers to the following fields:
+Rules:
+1. Reformat the email headers to the following fields:
 "From: " + The sender of the email.
-"Sent: " + The Date of the email in the format: Full weekday name, full month name day, four-digit year, hour:minute:second AM/PM. Be carefull to not change the date or time.
-"To: " + The receivers of the email, if they exist.
-"Cc: " + The Cc of the email, if they exist.
-"Subject: " + The subject of the email, if it exists.
-"Body: " + The body of the email, if it exists.
+"Sent: " + The Date of the email reformatted into: Full weekday name, full month name day, four-digit year, hour:minute:second AM/PM. Be carefull to not change the date or time.
+"To: " + The recipients of the email (if they exist).
+"Cc: " + The Cc of the email, (if they exist).
+"Subject: " + The subject of the email, (if it exists).
+"\n" + The entire body of the email exactly as it appears in the input.
 
-2. Copy the information to the fields exactly as shown in the inputted email. 
-3. Output must start with "From:" and end with "\n---End of email---".
+2. You are allowed to translate any text that is not in English, into English.
+3. Other than translating and reformatting the "Sent" date, do not modify the body text in any way. Copy it exactly as it is written. 
+4. Output must start with "From:" and end with "\n---End of email---".
                                                
 Example:
 Input: 
@@ -217,7 +219,7 @@ Important Rules:
 Example:
 Input: 
 From: John Doe <jdoe@email.com >
-Sent: 2023-12-29 22:00
+Sent: Friday, December 29, 2023 10:00 PM
 To: "Mary Joe"; "Hara Papadopoulou" <harapap@gmail.com>
 Cc: Sales Department 
 Subject: Upcoming Shipment

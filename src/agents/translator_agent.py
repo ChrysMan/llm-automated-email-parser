@@ -46,7 +46,7 @@ def translate_email_llm(email_text: str, prompt:str, model:AutoModelForCausalLM,
                 tokenize=True,
                 return_dict=True,
                 return_tensors="pt",
-            ).to(model.device)
+            ).to(device)
             
             #print(f"Token ID: {inputs["input_ids"].max()}, model vocab size:  {model.config.vocab_size}")
             #assert inputs["input_ids"].max() < model.config.vocab_size, f"Token ID exceeds model vocab size: {inputs["input_ids"].max()}, {model.config.vocab_size}"

@@ -35,11 +35,9 @@ def clean_email_llm(email_text:str, prompt, model:AutoModelForCausalLM, tokenize
             ):
             # Prepare the prompt
             prompt_text = prompt.format(email=email_text)
-            #print("Prompt text:\n", prompt_text)
 
             # Tokenize
-            input = tokenizer(prompt_text, return_tensors="pt")
-            input = input.to('cuda')  # Move to the correct device
+            input = tokenizer(prompt_text, return_tensors="pt").to(device)
 
             assert input['input_ids'].max() < model.config.vocab_size, f"Token ID exceeds model vocab size: {input['input_ids'].max()}, {model.config.vocab_size}"
 
@@ -77,8 +75,7 @@ def extract_email_llm(email_text: str, prompt, model:AutoModelForCausalLM, token
             prompt_text = prompt.format(email=email_text)
             
             # Tokenize
-            input = tokenizer(prompt_text, return_tensors="pt")
-            input = input.to(device)  # Move to the correct device
+            input = tokenizer(prompt_text, return_tensors="pt").to(device)
             
             # Generate the email information
             generated = model.generate(
@@ -88,14 +85,9 @@ def extract_email_llm(email_text: str, prompt, model:AutoModelForCausalLM, token
                 do_sample=False,
                 pad_token_id=tokenizer.eos_token_id
             )
-            
-            input_length = input['input_ids'].shape[1]
-            generated_tokens = generated[0][input_length:]
 
-            #print(f"Token count: {token_count}, Max new tokens: {max_new_tokens}, Input length: {input_length}, Generated tokens: {len(generated_tokens)}")
-            
             # Decode the generated text
-            generated_text = tokenizer.decode(generated_tokens, skip_special_tokens=True)
+            generated_text = tokenizer.decode(generated[0][input['input_ids'].shape[-1]:], skip_special_tokens=True)
             #print("\nGenerated text:\n", generated_text)
             #real_response = generated_text.split("<|eot_id|>")[0].strip()
 

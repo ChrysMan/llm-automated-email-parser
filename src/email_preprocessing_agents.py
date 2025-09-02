@@ -3,11 +3,12 @@ from time import time
 
 import torch
 from utils.logging_config import LOGGER
+from email import message_from_string
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from utils.graph_utils import extract_msg_file, clean_data, split_email_thread
 from agents.preprocessing_agent import extract_email_llm,clean_email_llm
 from agents.translator_agent import translate_email_llm
-from utils.prompts import translator_prompt_qwen, headers_cleaning_prompt, signature_cleaning_prompt,extraction_prompt
+from utils.prompts import translator_prompt_qwen, formatting_headers_prompt, headers_cleaning_prompt, signature_cleaning_prompt,extraction_prompt
 
 if __name__ == "__main__":
 
@@ -32,14 +33,18 @@ if __name__ == "__main__":
     model_name = "Qwen/Qwen2.5-7B-Instruct"
     model_name2 = "LuvU4ever/qwen2.5-3b-qlora-merged-v4"
 
-    device0 = "cuda:0" if torch.cuda.is_available() else "cpu"
-    device1 = "cuda:1" if torch.cuda.is_available() else "cpu"
+    if torch.cuda.is_available():
+        num_gpus = torch.cuda.device_count()
+        device0 = "cuda:1" if num_gpus > 1 else "cuda:0"
+        device1 = "cuda:2" if num_gpus > 2 else "cuda:0"
+    else:
+        device0 = device1 = "cpu"
     
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
-        torch_dtype="float16",
-        attn_implementation="sdpa",
-        device_map="auto"
+        torch_dtype=torch.float16,
+        attn_implementation="sdpa"
+        #device_map="auto"
     ).to(device0)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -47,7 +52,7 @@ if __name__ == "__main__":
     model2 = AutoModelForCausalLM.from_pretrained(
         model_name2,
         torch_dtype=torch.float16,
-        attn_implementation="sdpa",
+        attn_implementation="sdpa"
         #device_map="auto",
     ).to(device1)
 
@@ -74,11 +79,21 @@ if __name__ == "__main__":
                 for email in splitted_emails:
                     count += 1
                     translated_email = translate_email_llm(email, prompt=translator_prompt_qwen, model=model2, tokenizer=tokenizer2, trace_name=f"translate_{filename}_{count}", device=device1)
-                    cleaned_from_signatures = clean_email_llm(translated_email, prompt=signature_cleaning_prompt, model=model, tokenizer=tokenizer, trace_name=f"clean_sigantures_{filename}_{count}", device=device0)
+                    formatted_email = clean_email_llm(translated_email, prompt=formatting_headers_prompt, model=model, tokenizer=tokenizer, trace_name="format_email_headers", device=device0)
+                    cleaned_from_signatures = clean_email_llm(formatted_email, prompt=signature_cleaning_prompt, model=model, tokenizer=tokenizer, trace_name=f"clean_sigantures_{filename}_{count}", device=device0)
                     cleaned_from_headers = clean_email_llm(cleaned_from_signatures, prompt=headers_cleaning_prompt, model=model, tokenizer=tokenizer, trace_name=f"clean_headers_{filename}_{count}", device=device0)
-                    extracted_info = extract_email_llm(cleaned_from_headers, prompt=extraction_prompt, model=model, tokenizer=tokenizer, trace_name=f"extract_{filename}_{count}", device=device0)
+                    
+                    msg = message_from_string(cleaned_from_headers)
+                    email_dict = {
+                    "from": msg["From"],
+                    "to": msg["To"],
+                    "cc" : msg["Cc"],
+                    "subject": msg["Subject"],
+                    "body": msg.get_payload()
+                    }
+                    #extracted_info = extract_email_llm(cleaned_from_headers, prompt=extraction_prompt, model=model, tokenizer=tokenizer, trace_name=f"extract_{filename}_{count}", device=device0)
                     #print(f"\n\nEmail Info {count} from {filename}: {cleaned_headers_email}")
-                    email_data.append(extracted_info)
+                    email_data.append(email_dict)
             except Exception as e:
                 LOGGER.error(f"Failed to clean or extract email from {filename}: {e}")
                 continue
