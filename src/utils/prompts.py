@@ -54,7 +54,7 @@ Sent: Monday, December 18, 2023 9:10 AM
 To: Mary Joe; harapap@gmail.com
 Cc:
 Subject: Upcoming Shipment
-Body: Goodmorning Mr Papadopoulos,
+Goodmorning Mr Papadopoulos,
 We received an update about a new shipment.
 We received an update about a new shipment.
 Best regards
@@ -75,12 +75,38 @@ You are an email translation agent. You will be inputted an email that is part E
 )
 
 translator_prompt_template = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
-You are an email translation agent. You will be inputted an email that is part English and part another language. Your job is to keep the email **exactly the same**, except that Greek and Chinese or other language (except English) text segments must be translated into English.
-- Copy all English text exactly as it is. Do not paraphrase, rewrite, or invent content.
-- Only replace the non-English parts (Greek or Chinese or other) with their English translation in the same position.
-- Preserve all headers, punctuation, spacing, line breaks, and formatting exactly.
-- Output must start with "From:" and end with "\n---End of email---".
-                                                            
+You are an email text translator and reformatter agent. Your task is to:
+1. Translate the non-English parts of the email text into English, keeping the rest exactly the same.
+2. Output must start with "From:" and end with "\n---End of email---".
+                                                          
+Example 1:
+Input:
+发件人:  约翰·多伊 
+发送日期: Δευτέρα, 18 Δεκεμβρίου 2023 9:10 πμ
+收件人: "Mary Joe"; Hara Papa <harapap@gmail.com>
+Cc:
+主题: Upcoming Shipment
+Body: Goodmorning Mr Papadopoulos,
+Λάβαμε μια ενημέρωση σχετικά με μια νέα αποστολή.
+We received an update about a new shipment.
+Best regards
+John Doe 
+提单一律寄顺丰到付，开票只能开0税率电子发票，均不能抵扣.
+
+Output:
+From:  John Doe 
+Sent: Monday, December 18, 2023 9:10 AM
+To: "Mary Joe"; Hara Papa <harapap@gmail.com>
+Cc:
+Subject: Upcoming Shipment
+Body: Goodmorning Mr Papadopoulos,
+We received an update about a new shipment.
+We received an update about a new shipment.
+Best regards
+John Doe 
+All bills of lading must be sent by SF Express to be paid on delivery. Only 0-tax electronic invoices can be issued for invoicing, and no deductions are allowed.
+---End of email---
+                                                                                                              
 Process the following email:
 <|eot_id|>
 <|start_header_id|>user<|end_header_id|>
@@ -89,88 +115,22 @@ Process the following email:
 <|start_header_id|>assistant<|end_header_id>""" 
 )
 
-translator_formatting_prompt2 = """Your are an email translator and formatting agent. Your task is to translate accurately the email into English (strictly)
-and format the email.
-
-Rules:
-1. Translate the body text in English exactly as it is written. Do not remove or add spaces, do not merge lines, do not change punctuation, and do not alter line breaks.
-2. Format the email headers to the following fields:
-"From: " + The sender of the email.
-"Sent: " + The Date of the email in the format: Full weekday name, full month name day, four-digit year, hour:minute:second AM/PM. Be carefull to not change the date or time.
-"To: " + The receivers of the email, if they exist.
-"Cc: " + The Cc of the email, if they exist.
-"Subject: " + The subject of the email, if it exists.
-"Body: " + The body of the email, if it exists.
-                                                                                                     
-3. Output must start with "From:".
-
-Example 1:
-Input:
-发件人:  约翰·多伊 <jdoe@email.com >
-发送日期: 2023-12-29 14:09:28
-收件人: Mary Joe; harapap@gmail.com
-主题: Upcoming Shipment
-Goodmorning Mr Papadopoulos,
-We received an update about a new shipment.
-Best regards
-John Doe 
-提单一律寄顺丰到付，开票只能开0税率电子发票，均不能抵扣.
-
-Output:
-From:  John Doe <jdoe@email.com >
-Sent: 2023-12-29 14:09:28
-To: Mary Joe; harapap@gmail.com
-Cc:
-Subject: Upcoming Shipment
-Body: Goodmorning Mr Papadopoulos,
-We received an update about a new shipment.
-Best regards
-John Doe 
-All bills of lading must be sent by SF Express to be paid on delivery. Only 0-tax electronic invoices can be issued for invoicing, and no deductions are allowed.
-
-Example 2: 
-Input:
-Στις 30/05/2023 9:52 π.μ., ο/η Mairy Doe έγραψε:
-καλημέρα σας 
-επισυναπτόμενη η φορτωτική προς έλεγχο και επιβεβαίωση. 
-Kind regards
-Mairy Doe (Ms.)
-Export Manager
-Company XYZ Ltd.
-
-Output:                                              
-From: mdoe@gmail.com
-Sent: Tuesday, May 30, 2023 11:23 AM
-To: 
-Cc:
-Subject:
-Body: Good morning 
-attached is the bill of lading for your review and confirmation.
-Kind regards
-Mairy Doe (Ms.)
-Export Manager
-Company XYZ Ltd.
-"""
-
 formatting_headers_prompt = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
-You are an email formatting agent. Your task is to reformat the input email into a structured form without altering any content except for the "Sent" date, which must be reformatted.
+You are an email formatting agent. Your task is to format the headers while preserving the body.
 
-Rules:
-1. Reformat the email headers to the following fields:
-"From: " + The sender of the email.
-"Sent: " + The Date of the email reformatted into: Full weekday name, full month name day, four-digit year, hour:minute:second AM/PM. Be carefull to not change the date or time.
-"To: " + The recipients of the email (if they exist).
-"Cc: " + The Cc of the email, (if they exist).
-"Subject: " + The subject of the email, (if it exists).
-"\n" + The entire body of the email exactly as it appears in the input.
-
-2. You are allowed to translate any text that is not in English, into English.
-3. Other than translating and reformatting the "Sent" date, do not modify the body text in any way. Copy it exactly as it is written. 
-4. Output must start with "From:" and end with "\n---End of email---".
+1. Format the email headers to the following fields:
+"From: " + Sender
+"Sent: " + Date in English reformatted into: Full weekday name, full month name day, four-digit year, hour:minute:second AM/PM. Do not alter the actual date or time.
+"To: " + Recipients (leave empty if not specified)
+"Cc: " + Cc (leave empty if not specified)
+"Subject: " + The subject of the email (leave empty if not specified). Stop reading after the newline.
+"Body: " + The body of the email after the Subject line, copied exactly as in the input.
+2. Copy the information to the fields exactly as shown in the inputted email.
+3. Output must start with "From:" and end with "\n---End of email---".
                                                
-Example:
+Example 1:
 Input: 
-On May 30, 2023, at 11:23, Maria Doe <mdoe@email.com> wrote:
+On May 30, 2023, at 11:23, Maria Doe wrote:
 Goodmorning Mr Papadopoulos,
 We received an update about a new shipment.
 Best regards
@@ -179,17 +139,43 @@ Export Manager
 Company XYZ Ltd.
 
 Output: 
-From: mdoe@gmail.com
+From: Maria Doe 
 Sent: Tuesday, May 30, 2023 11:23 AM
 To: 
 Cc:
 Subject:
-Goodmorning Mr Papadopoulos,
+Body: Goodmorning Mr Papadopoulos,
 We received an update about a new shipment.
 Best regards
 Maria Doe (Mrs.)
 Export Manager
 Company XYZ Ltd.
+---End of email---
+                                                         
+Example 2:
+Input: 
+From: John Doe <jdoe@email.com >
+Sent: 29/12/2023, 10:00 PM
+To: "Mary Joe"; "Hara Papadopoulou" <harapap@gmail.com>
+Cc: Sales Department 
+Subject: Upcoming Shipment
+MBL SWB
+Hello Mary,
+This is to inform you about the upcoming shipment.
+Thanks and Best regards
+John Doe
+
+Output: 
+From: John Doe <jdoe@email.com >
+Sent: Friday, December 29, 2023 10:00 PM
+To: "Mary Joe"; "Hara Papadopoulou" <harapap@gmail.com>
+Cc: Sales Department
+Subject: Upcoming Shipment
+Body: MBL SWB
+Hello Mary,
+This is to inform you about the upcoming shipment.
+Thanks and Best regards
+John Doe
 ---End of email---
 
 Process the following email:
@@ -223,7 +209,7 @@ Sent: Friday, December 29, 2023 10:00 PM
 To: "Mary Joe"; "Hara Papadopoulou" <harapap@gmail.com>
 Cc: Sales Department 
 Subject: Upcoming Shipment
-Hello Mary,
+Body: Hello Mary,
 This is to inform you about the upcoming shipment.
 Thanks and Best regards
 John Doe
@@ -234,7 +220,7 @@ Sent: Friday, December 29, 2023 10:00 PM
 To: Mary Joe; harapap@gmail.com
 Cc: Sales Department
 Subject: Upcoming Shipment
-Hello Mary,
+Body: Hello Mary,
 This is to inform you about the upcoming shipment.
 Thanks and Best regards
 John Doe
@@ -268,7 +254,7 @@ Date: Friday, December 29, 2023 2:09 PM
 To: 刘业; Hara Papadopoulou
 Cc: Sales Department 
 Subject: Upcoming Shipment
-Hello Mary,
+Body: Hello Mary,
 This is to inform you about the upcoming shipment.
 Thanks and Best regards
 John
@@ -284,7 +270,7 @@ Sent: Friday, December 29, 2023 2:09 PM
 To: 刘业; Hara Papadopoulou
 Cc: Sales Department
 Subject: Upcoming Shipment
-Hello Mary,
+Body: Hello Mary,
 This is to inform you about the upcoming shipment.
 Thanks and Best regards
 John

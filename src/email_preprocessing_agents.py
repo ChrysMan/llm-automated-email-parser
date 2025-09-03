@@ -7,8 +7,7 @@ from email import message_from_string
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from utils.graph_utils import extract_msg_file, clean_data, split_email_thread
 from agents.preprocessing_agent import extract_email_llm,clean_email_llm
-from agents.translator_agent import translate_email_llm
-from utils.prompts import translator_prompt_qwen, formatting_headers_prompt, headers_cleaning_prompt, signature_cleaning_prompt,extraction_prompt
+from utils.prompts import formatting_headers_prompt, translator_prompt_template, headers_cleaning_prompt, signature_cleaning_prompt,extraction_prompt
 
 if __name__ == "__main__":
 
@@ -49,14 +48,14 @@ if __name__ == "__main__":
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    model2 = AutoModelForCausalLM.from_pretrained(
-        model_name2,
-        torch_dtype=torch.float16,
-        attn_implementation="sdpa"
-        #device_map="auto",
-    ).to(device1)
+    # model2 = AutoModelForCausalLM.from_pretrained(
+    #     model_name2,
+    #     torch_dtype=torch.float16,
+    #     attn_implementation="sdpa"
+    #     #device_map="auto",
+    # ).to(device1)
 
-    tokenizer2 = AutoTokenizer.from_pretrained(model_name2)
+    # tokenizer2 = AutoTokenizer.from_pretrained(model_name2)
 
     email_data = []
 
@@ -78,18 +77,20 @@ if __name__ == "__main__":
                 count = 0
                 for email in splitted_emails:
                     count += 1
-                    translated_email = translate_email_llm(email, prompt=translator_prompt_qwen, model=model2, tokenizer=tokenizer2, trace_name=f"translate_{filename}_{count}", device=device1)
-                    formatted_email = clean_email_llm(translated_email, prompt=formatting_headers_prompt, model=model, tokenizer=tokenizer, trace_name="format_email_headers", device=device0)
-                    cleaned_from_signatures = clean_email_llm(formatted_email, prompt=signature_cleaning_prompt, model=model, tokenizer=tokenizer, trace_name=f"clean_sigantures_{filename}_{count}", device=device0)
+                    formatted_email = clean_email_llm(email, prompt=formatting_headers_prompt, model=model, tokenizer=tokenizer, trace_name="format_email_headers", device=device0)
+                    translated_email = clean_email_llm(formatted_email, prompt=translator_prompt_template, model=model, tokenizer=tokenizer, trace_name=f"translate_{filename}_{count}", device=device0)
+                    cleaned_from_signatures = clean_email_llm(translated_email, prompt=signature_cleaning_prompt, model=model, tokenizer=tokenizer, trace_name=f"clean_sigantures_{filename}_{count}", device=device0)
                     cleaned_from_headers = clean_email_llm(cleaned_from_signatures, prompt=headers_cleaning_prompt, model=model, tokenizer=tokenizer, trace_name=f"clean_headers_{filename}_{count}", device=device0)
                     
-                    msg = message_from_string(cleaned_from_headers)
+                    final_email = cleaned_from_headers.replace("Body:", "\n", 1)
+
+                    msg = message_from_string(final_email)
                     email_dict = {
                     "from": msg["From"],
                     "to": msg["To"],
                     "cc" : msg["Cc"],
                     "subject": msg["Subject"],
-                    "body": msg.get_payload()
+                    "body": msg["Body"] + msg.get_payload()
                     }
                     #extracted_info = extract_email_llm(cleaned_from_headers, prompt=extraction_prompt, model=model, tokenizer=tokenizer, trace_name=f"extract_{filename}_{count}", device=device0)
                     #print(f"\n\nEmail Info {count} from {filename}: {cleaned_headers_email}")

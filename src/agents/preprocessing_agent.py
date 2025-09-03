@@ -37,7 +37,7 @@ def clean_email_llm(email_text:str, prompt, model:AutoModelForCausalLM, tokenize
             prompt_text = prompt.format(email=email_text)
 
             # Tokenize
-            input = tokenizer(prompt_text, return_tensors="pt").to(device)
+            input = tokenizer(prompt_text, return_tensors="pt").to('cuda')
 
             assert input['input_ids'].max() < model.config.vocab_size, f"Token ID exceeds model vocab size: {input['input_ids'].max()}, {model.config.vocab_size}"
 
