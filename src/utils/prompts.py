@@ -75,11 +75,13 @@ You are an email translation agent. You will be inputted an email that is part E
 )
 
 translator_prompt_template = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
-You are an email text translator and reformatter agent. Your task is to:
-1. Translate the non-English parts of the email text into English, keeping the rest exactly the same.
-2. Output must start with "From:" and end with "\n---End of email---".
+You are an email text translator. Your task is to:
+1. Translate every non-English segment into English. 
+2. Do not modify text that is already in English. 
+3. Preserve the email’s formatting, punctuation, spacing, and line breaks exactly as given. 
+4. The output must always start with "From:" and end with "\\n---End of email---".
                                                           
-Example 1:
+Example:
 Input:
 发件人:  约翰·多伊 
 发送日期: Δευτέρα, 18 Δεκεμβρίου 2023 9:10 πμ
@@ -87,7 +89,7 @@ Input:
 Cc:
 主题: Upcoming Shipment
 Body: Goodmorning Mr Papadopoulos,
-Λάβαμε μια ενημέρωση σχετικά με μια νέα αποστολή.
+Λάβαμε μια ενημέρωση σχετικά με μια νέα αποστολή στις 12:00 μμ.
 We received an update about a new shipment.
 Best regards
 John Doe 
@@ -100,14 +102,14 @@ To: "Mary Joe"; Hara Papa <harapap@gmail.com>
 Cc:
 Subject: Upcoming Shipment
 Body: Goodmorning Mr Papadopoulos,
-We received an update about a new shipment.
+We received an update about a new shipment at 12:00 PM.
 We received an update about a new shipment.
 Best regards
 John Doe 
 All bills of lading must be sent by SF Express to be paid on delivery. Only 0-tax electronic invoices can be issued for invoicing, and no deductions are allowed.
 ---End of email---
                                                                                                               
-Process the following email:
+Translate the following email:
 <|eot_id|>
 <|start_header_id|>user<|end_header_id|>
 {email}
@@ -116,17 +118,21 @@ Process the following email:
 )
 
 formatting_headers_prompt = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
-You are an email formatting agent. Your task is to format the headers while preserving the body.
+You are an email formatting agent. The formatted output will be used in automated downstream parsing, so consistency and strict adherence to rules are critical.
 
-1. Format the email headers to the following fields:
-"From: " + Sender
-"Sent: " + Date in English reformatted into: Full weekday name, full month name day, four-digit year, hour:minute:second AM/PM. Do not alter the actual date or time.
-"To: " + Recipients (leave empty if not specified)
-"Cc: " + Cc (leave empty if not specified)
-"Subject: " + The subject of the email (leave empty if not specified). Stop reading after the newline.
-"Body: " + The body of the email after the Subject line, copied exactly as in the input.
-2. Copy the information to the fields exactly as shown in the inputted email.
-3. Output must start with "From:" and end with "\n---End of email---".
+Task: Reformat email headers into a standardized structure while preserving the email text exactly as it appears in the input.
+
+Formatting Rules:
+1. Format headers into the following fields (in this exact order):
+   - From: + sender (exactly as in input)
+   - Sent: + date/time converted into English format → Full weekday name, full month name day, four-digit year, hour:minute:second AM/PM. Do not change the actual date/time values, only reformat them. "πμ" becomes "AM", "μμ" becomes "PM".
+   - To: + recipients (leave blank if not specified)
+   - Cc: + recipients (leave blank if not specified)
+   - Subject: + subject text (stop reading subject after the newline; leave blank if not specified)
+   - In a newline copy the entire body text after the subject line exactly as in the input (preserve all line breaks, spaces, punctuation).
+
+2. Do not merge, drop, or add content. Keep all non-header information inside the Body: field.
+3. The output must always start with "From:" and end with "\n---End of email---".
                                                
 Example 1:
 Input: 
@@ -144,7 +150,7 @@ Sent: Tuesday, May 30, 2023 11:23 AM
 To: 
 Cc:
 Subject:
-Body: Goodmorning Mr Papadopoulos,
+Goodmorning Mr Papadopoulos,
 We received an update about a new shipment.
 Best regards
 Maria Doe (Mrs.)
@@ -155,9 +161,8 @@ Company XYZ Ltd.
 Example 2:
 Input: 
 From: John Doe <jdoe@email.com >
-Sent: 29/12/2023, 10:00 PM
+Sent: 29/12/2023, 10:00 μμ
 To: "Mary Joe"; "Hara Papadopoulou" <harapap@gmail.com>
-Cc: Sales Department 
 Subject: Upcoming Shipment
 MBL SWB
 Hello Mary,
@@ -169,9 +174,9 @@ Output:
 From: John Doe <jdoe@email.com >
 Sent: Friday, December 29, 2023 10:00 PM
 To: "Mary Joe"; "Hara Papadopoulou" <harapap@gmail.com>
-Cc: Sales Department
+Cc: 
 Subject: Upcoming Shipment
-Body: MBL SWB
+MBL SWB
 Hello Mary,
 This is to inform you about the upcoming shipment.
 Thanks and Best regards
@@ -188,39 +193,50 @@ Process the following email:
 
 
 headers_cleaning_prompt = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
-You are an email cleaning agent. Your task is to clean email headers while preserving the body.
+You are an email cleaning agent. Your task is to clean the email headers while preserving the email body
+exactly. This cleaning is needed to prepare emails for automated parsing and structured processing in
+downstream systems.
 
-For the fields "From:", "To:", "Cc:":
-1. Each field must contain exactly one identifier per person.
-2. If email address or name are present in a field, keep only the email address.
-3. If the name is present, keep it as is.
-4. If the email address is present, keep it as is.
-5. Do not move information between the fields.
-6. If the name contains apostrophes ("),(') remove them.
-    
-Important Rules:
-- Copy the body text exactly as it is written. Do not remove or add spaces, do not merge lines, do not change punctuation, and do not alter line breaks. Preserve all formatting exactly. 
-- Output must start with "From:" and end with sender name + "\n---End of email---".
+Rules for header fields:
+1. Process the fields "From:", "To:", "Cc:"  sequentially, using the following rules:
+    - Each field must contain exactly one identifier per person, either email address or name.
+    - If both email address and name are present in a field, keep only the email address.
+    - If only one identifier per person is present, keep it as is.
+    - Remove apostrophes (" or ') only from names. Do not remove any other characters.
+    - Separate multiple entries with a semicolon and a space ("; ").
+    - Do not generate or fabricate email addresses for names that do not have them                                                
+2. Copy "Subject:" and "Sent:" headers exactly as in the input.
+
+Rules for Body:
+- Copy the body text exactly as written.
+- Do not remove or add spaces, merge lines, change punctuation, or alter line breaks.
+- Preserve all formatting exactly.
+
+Output Format:
+- Start with "From:" and end with the sender's name followed by "\n---End of email---".
+- Double-check that all rules are applied and the body text is unchanged.                                                       
 
 Example:
 Input: 
-From: John Doe <jdoe@email.com >
+From: John Doe 
 Sent: Friday, December 29, 2023 10:00 PM
-To: "Mary Joe"; "Hara Papadopoulou" <harapap@gmail.com>
+To: "Mary Joe"; "Hara Papadopoulou" <harapap@gmail.com>; Kate Doe <katedoe@example.com>
 Cc: Sales Department 
 Subject: Upcoming Shipment
-Body: Hello Mary,
+MBL SWB
+Hello Mary,
 This is to inform you about the upcoming shipment.
 Thanks and Best regards
 John Doe
 
 Output: 
-From: jdoe@email.com
+From: John Doe
 Sent: Friday, December 29, 2023 10:00 PM
-To: Mary Joe; harapap@gmail.com
+To: Mary Joe; harapap@gmail.com; katedoe@example.com
 Cc: Sales Department
 Subject: Upcoming Shipment
-Body: Hello Mary,
+MBL SWB
+Hello Mary,
 This is to inform you about the upcoming shipment.
 Thanks and Best regards
 John Doe
@@ -235,17 +251,17 @@ Process the following email:
 """)
 
 signature_cleaning_prompt = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
-You are an email cleaning agent. You have one task:
+You are an email cleaning agent. You have one task: 
                                                          
-Remove all the information that follow after the **signature name line**:
-1. The signature block starts with phrases like "Best regards", "Thanks and Best regards", "Kind regards", "Sincerely", "Yours faithfully", "Ευχαριστώ", "Ευχαριστώ πολύ", "Με εκτίμηση" or something similar.
+Remove all the information that follow after the signature name line:
+1. The signature block starts with phrases like "Best regards", "Thanks and Best regards", "Kind regards", "Sincerely", "Yours faithfully", "Tks & Best Regards", "Ευχαριστώ", "Ευχαριστώ πολύ", "Με εκτίμηση" or something similar.
 2. After this phrase, keep only the senders' name line.
 3. Delete everything that appears after that name line, including phone numbers, job titles, company names, addresses, disclaimers, antivirus messages, footers, device signatures or blank lines.
 4. If there is no name signature delete from the end, text that seems irrelevant to the email body like disclaimers, antivirus messages, footers, device signatures or blank lines
                                                   
 Important Rules:
 - Copy the body text exactly as it is written. Do not remove or add spaces, do not merge lines, do not change punctuation, and do not alter line breaks. Preserve all formatting exactly. 
-- Output must start with "From:" and end strictly with the greeting + "\n" + senders' name + "\n---End of email---".
+- Output must start with "From:" and end strictly with the greeting phrase + newline + senders' name + newline + ---End of email---".
 
 Example:
 Input: 
@@ -271,6 +287,60 @@ To: 刘业; Hara Papadopoulou
 Cc: Sales Department
 Subject: Upcoming Shipment
 Body: Hello Mary,
+This is to inform you about the upcoming shipment.
+Thanks and Best regards
+John
+---End of email---                                                
+                                                         
+Process the following email:
+<|eot_id|>
+<|start_header_id|>user<|end_header_id|>
+{email}
+<|eot_id|>
+<|start_header_id|>assistant<|end_header_id>                                                        
+""")
+
+signature_cleaning_prompt2 = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
+You are an email cleaning agent. This cleaning is needed to prepare emails for automated parsing and structured processing in
+downstream systems. 
+You have one task: Remove only the text that comes after the signature name line. Do not change anything else in the email.
+                                                         
+Cleaning rules:
+1. A signature block starts with phrases like "Best regards", "Thanks and Best regards", "Kind regards", "Sincerely", "Yours faithfully", "Ευχαριστώ", "Ευχαριστώ πολύ", "Με εκτίμηση" or something similar.
+2. After this phrase, keep only the sender's name line.
+3. Delete all text that appears after that sender's name line, including phone numbers, job titles, company names, addresses, disclaimers, antivirus messages, footers, device signatures or blank lines.
+4. If there is no name line, delete from the end irrelevant trailing text like disclaimers, antivirus messages, footers, device signatures or blank lines
+                                                  
+Formatting Rules:
+- Copy exactly the headers (From, Sent, To, Cc, Subject) as in the input. 
+- Do not change the body text before the signature.
+- Do not remove or add spaces, merge lines, change punctuation, or alter line breaks.
+- Output must start with "From:" and end strictly with the greeting phrase + newline + senders' name + newline + ---End of email---".
+
+Example:
+Input: 
+From: johndoe@gmail.com
+Date: Friday, December 29, 2023 2:09 PM
+To: 刘业; Hara Papadopoulou
+Cc: Sales Department 
+Subject: Upcoming Shipment
+Hello Mary,
+This is to inform you about the upcoming shipment.
+Thanks and Best regards
+John
+Export Manager
+Company XYZ Ltd.
+This email has been scanned by XYZ AntiVirus.
+***TO AVOID HACKER,PLS RECONFIRM BANK ACCOUNT WITH ME VIA WECHAT OR SKYPE BEFORE ARRANGE PAYMENT***,
+Sent from my iphone
+                                                         
+Output: 
+From: johndoe@gmail.com
+Sent: Friday, December 29, 2023 2:09 PM
+To: 刘业; Hara Papadopoulou
+Cc: Sales Department
+Subject: Upcoming Shipment
+Hello Mary,
 This is to inform you about the upcoming shipment.
 Thanks and Best regards
 John

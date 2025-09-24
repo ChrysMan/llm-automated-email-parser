@@ -34,7 +34,7 @@ if __name__ == "__main__":
 
     if torch.cuda.is_available():
         num_gpus = torch.cuda.device_count()
-        device0 = "cuda:1" if num_gpus > 1 else "cuda:0"
+        device0 = "cuda:0" if num_gpus > 1 else "cuda:0"
         device1 = "cuda:2" if num_gpus > 2 else "cuda:0"
     else:
         device0 = device1 = "cpu"
@@ -42,9 +42,13 @@ if __name__ == "__main__":
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         torch_dtype=torch.float16,
-        attn_implementation="sdpa"
-        #device_map="auto"
-    ).to(device0)
+        attn_implementation="sdpa",
+        device_map="auto",
+        max_memory={
+            2: "16GB",   # allow GPU 0
+            3: "16GB"    # allow GPU 1
+        }
+    )#.to(device0)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
@@ -82,15 +86,13 @@ if __name__ == "__main__":
                     cleaned_from_signatures = clean_email_llm(translated_email, prompt=signature_cleaning_prompt, model=model, tokenizer=tokenizer, trace_name=f"clean_sigantures_{filename}_{count}", device=device0)
                     cleaned_from_headers = clean_email_llm(cleaned_from_signatures, prompt=headers_cleaning_prompt, model=model, tokenizer=tokenizer, trace_name=f"clean_headers_{filename}_{count}", device=device0)
                     
-                    final_email = cleaned_from_headers.replace("Body:", "\n", 1)
-
-                    msg = message_from_string(final_email)
+                    msg = message_from_string(cleaned_from_headers)
                     email_dict = {
                     "from": msg["From"],
                     "to": msg["To"],
                     "cc" : msg["Cc"],
                     "subject": msg["Subject"],
-                    "body": msg["Body"] + msg.get_payload()
+                    "body": msg.get_payload()
                     }
                     #extracted_info = extract_email_llm(cleaned_from_headers, prompt=extraction_prompt, model=model, tokenizer=tokenizer, trace_name=f"extract_{filename}_{count}", device=device0)
                     #print(f"\n\nEmail Info {count} from {filename}: {cleaned_headers_email}")

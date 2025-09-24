@@ -41,20 +41,25 @@ def clean_email_llm(email_text:str, prompt, model:AutoModelForCausalLM, tokenize
 
             assert input['input_ids'].max() < model.config.vocab_size, f"Token ID exceeds model vocab size: {input['input_ids'].max()}, {model.config.vocab_size}"
 
+            tokenizer.eos_token = "<|endoftext|>"
+
             # Generate the cleaned email text
             cleaned_email = model.generate(
                 input_ids=input['input_ids'],
                 attention_mask=input['attention_mask'],
                 max_new_tokens=input['input_ids'].shape[-1],
+                temperature=0.0,
+                top_p=1.0,
                 do_sample=False,
-                pad_token_id = tokenizer.eos_token_id
+                eos_token_id = tokenizer.eos_token_id,
+                pad_token_id=tokenizer.eos_token_id
             )
 
             # Decode the generated text
             cleaned_email_text = tokenizer.decode(cleaned_email[0], skip_special_tokens=False)
-            #print(cleaned_email_text)
+            #print("\n\nRaw response:\n", cleaned_email_text)
             # Extract the relevant part of the response
-            real_response = cleaned_email_text.split("<|start_header_id|>assistant<|end_header_id>")[-1].split("---End of email---")[0].strip()
+            real_response = cleaned_email_text.split("<|start_header_id|>assistant<|end_header_id>|")[-1].split("<|start_header_id|>assistant<|end_header_id>")[-1].split("---End of email---")[0].strip()
             cleaned_response = clean_data(real_response)
             return cleaned_response
     except Exception as e:

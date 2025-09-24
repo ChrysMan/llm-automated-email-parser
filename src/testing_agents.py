@@ -27,8 +27,8 @@ from agents.translator_agent import translate_email_llm
 
 if __name__ == "__main__":
     tic1 = time()
-    #model_name = "Qwen/Qwen2.5-7B-Instruct"
-    model_name = "Qwen/Qwen3-30B-A3B-Instruct-2507"
+    model_name = "Qwen/Qwen2.5-7B-Instruct"
+    #model_name = "Qwen/Qwen3-30B-A3B-Instruct-2507"
     #model_name = "Qwen/Qwen2.5-14B-Instruct"
     model_name2 = "LuvU4ever/qwen2.5-3b-qlora-merged-v4"
     #model_name2 = "facebook/seamless-m4t-v2-large"
@@ -47,7 +47,11 @@ if __name__ == "__main__":
         model_name,
         torch_dtype=torch.float16,
         attn_implementation="sdpa",
-        device_map="auto"
+        device_map="auto",
+        max_memory={
+            0: "16GB",   # allow GPU 0
+            1: "16GB"    # allow GPU 1
+        }
     )#.to(device0)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -61,7 +65,7 @@ if __name__ == "__main__":
 
     # tokenizer2 = AutoTokenizer.from_pretrained(model_name2)
 
-    email_text = """"""
+    email_text = """Your email text goes here"""
 
     prompt="""Translate this email text to english. Output must start with 'From:' and end with '\n---End of email--- Process the following email:
 <|eot_id|>
@@ -86,10 +90,10 @@ if __name__ == "__main__":
     print("\n\nCleaned headers:\n", cleaned_from_headers)
     LOGGER.info(f"Time taken to process: {time() - tic1} seconds")
 
-    final_email = cleaned_from_headers.replace("Body:", "\n", 1)
-    print("\n\nFinal cleaned email:\n", final_email)
+    # final_email = cleaned_from_headers.replace("Body:", "\n", 1)
+    # print("\n\nFinal cleaned email:\n", final_email)
 
-    msg = message_from_string(final_email)
+    msg = message_from_string(cleaned_from_headers)
     email_dict = {
     "from": msg["From"],
     "sent" :  msg["Sent"],
