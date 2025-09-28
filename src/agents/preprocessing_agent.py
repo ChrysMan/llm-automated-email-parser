@@ -13,7 +13,7 @@ else:
     LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
 
 from langsmith import traceable, trace, Client
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig
 from langchain_core.output_parsers import JsonOutputParser
 from utils.logging_config import LOGGER
 from utils.prompts import EmailInfo, extraction_prompt
@@ -43,16 +43,18 @@ def clean_email_llm(email_text:str, prompt, model:AutoModelForCausalLM, tokenize
 
             tokenizer.eos_token = "<|endoftext|>"
 
+            gen_config = GenerationConfig(
+                max_new_tokens=input['input_ids'].shape[-1],
+                do_sample=False,
+                eos_token_id = tokenizer.eos_token_id,
+                pad_token_id=tokenizer.eos_token_id
+            )
+
             # Generate the cleaned email text
             cleaned_email = model.generate(
                 input_ids=input['input_ids'],
                 attention_mask=input['attention_mask'],
-                max_new_tokens=input['input_ids'].shape[-1],
-                temperature=0.0,
-                top_p=1.0,
-                do_sample=False,
-                eos_token_id = tokenizer.eos_token_id,
-                pad_token_id=tokenizer.eos_token_id
+                generation_config=gen_config
             )
 
             # Decode the generated text

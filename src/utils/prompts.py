@@ -76,10 +76,11 @@ You are an email translation agent. You will be inputted an email that is part E
 
 translator_prompt_template = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
 You are an email text translator. Your task is to:
-1. Translate every non-English segment into English. 
+1. Translate every non-English segment into proper natural English words. 
 2. Do not modify text that is already in English. 
-3. Preserve the email’s formatting, punctuation, spacing, and line breaks exactly as given. 
-4. The output must always start with "From:" and end with "\\n---End of email---".
+3. Do not use transliteration. For example "Δευτέρα" becomes "Monday", not "Deutera".                                                   
+4. Preserve the email’s formatting, punctuation, spacing, and line breaks exactly as given. 
+5. The output must always start with "From:" and end with newline + "---End of email---".
                                                           
 Example:
 Input:
@@ -87,7 +88,7 @@ Input:
 发送日期: Δευτέρα, 18 Δεκεμβρίου 2023 9:10 πμ
 收件人: "Mary Joe"; Hara Papa <harapap@gmail.com>
 Cc:
-主题: Upcoming Shipment
+主题: Προσφορά για Ντουμπάι
 Body: Goodmorning Mr Papadopoulos,
 Λάβαμε μια ενημέρωση σχετικά με μια νέα αποστολή στις 12:00 μμ.
 We received an update about a new shipment.
@@ -100,7 +101,7 @@ From:  John Doe
 Sent: Monday, December 18, 2023 9:10 AM
 To: "Mary Joe"; Hara Papa <harapap@gmail.com>
 Cc:
-Subject: Upcoming Shipment
+Subject: Offer for Dubai
 Body: Goodmorning Mr Papadopoulos,
 We received an update about a new shipment at 12:00 PM.
 We received an update about a new shipment.
@@ -132,7 +133,7 @@ Formatting Rules:
    - In a newline copy the entire body text after the subject line exactly as in the input (preserve all line breaks, spaces, punctuation).
 
 2. Do not merge, drop, or add content. Keep all non-header information inside the Body: field.
-3. The output must always start with "From:" and end with "\n---End of email---".
+3. The output must always start with "From:" and end with newline + "---End of email---".
                                                
 Example 1:
 Input: 
@@ -194,31 +195,29 @@ Process the following email:
 
 headers_cleaning_prompt = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
 You are an email cleaning agent. Your task is to clean the email headers while preserving the email body
-exactly. This cleaning is needed to prepare emails for automated parsing and structured processing in
-downstream systems.
-
-Rules for header fields:
-1. Process the fields "From:", "To:", "Cc:"  sequentially, using the following rules:
-    - Each field must contain exactly one identifier per person, either email address or name.
-    - If both email address and name are present in a field, keep only the email address.
-    - If only one identifier per person is present, keep it as is.
-    - Remove apostrophes (" or ') only from names. Do not remove any other characters.
-    - Separate multiple entries with a semicolon and a space ("; ").
-    - Do not generate or fabricate email addresses for names that do not have them                                                
+exactly. 
+                                                       
+Rules for cleaning header fields:
+1. Process the fields "From:", "To:", "Cc:"  sequentially, using the following rules in order:
+    - Each field must contain exactly one identifier per contact, either one email address or one name.
+    - If name and email address appear in the same contact, in any order and in any format, keep only the email address.
+    - If multiple email addresses appear in the same contact, keep only the first email address.
+    - If only the name appear in the contact, keep only the name.                                                       
+    - Remove apostrophes (" or ') from the contacts.
+    - Do not generate or fabricate email addresses for contacts that have only names.                                                
 2. Copy "Subject:" and "Sent:" headers exactly as in the input.
 
 Rules for Body:
 - Copy the body text exactly as written.
-- Do not remove or add spaces, merge lines, change punctuation, or alter line breaks.
 - Preserve all formatting exactly.
 
 Output Format:
-- Start with "From:" and end with the sender's name followed by "\n---End of email---".
+- Start with "From:" and end with newline + "---End of email---".
 - Double-check that all rules are applied and the body text is unchanged.                                                       
 
 Example:
 Input: 
-From: John Doe 
+From: "John Doe" <mailto:johndoe@email.com> 
 Sent: Friday, December 29, 2023 10:00 PM
 To: "Mary Joe"; "Hara Papadopoulou" <harapap@gmail.com>; Kate Doe <katedoe@example.com>
 Cc: Sales Department 
@@ -230,7 +229,7 @@ Thanks and Best regards
 John Doe
 
 Output: 
-From: John Doe
+From: johndoe@email.com
 Sent: Friday, December 29, 2023 10:00 PM
 To: Mary Joe; harapap@gmail.com; katedoe@example.com
 Cc: Sales Department
@@ -253,15 +252,17 @@ Process the following email:
 signature_cleaning_prompt = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
 You are an email cleaning agent. You have one task: 
                                                          
-Remove all the information that follow after the signature name line:
-1. The signature block starts with phrases like "Best regards", "Thanks and Best regards", "Kind regards", "Sincerely", "Yours faithfully", "Tks & Best Regards", "Ευχαριστώ", "Ευχαριστώ πολύ", "Με εκτίμηση" or something similar.
-2. After this phrase, keep only the senders' name line.
-3. Delete everything that appears after that name line, including phone numbers, job titles, company names, addresses, disclaimers, antivirus messages, footers, device signatures or blank lines.
-4. If there is no name signature delete from the end, text that seems irrelevant to the email body like disclaimers, antivirus messages, footers, device signatures or blank lines
+Remove all the information that follow after the signature line:
+1. The signature line consists of a closing greeting followed by the sender’s name 
+    - The closing greeting can be phrases like: "Best regards", "Thanks and Best regards", "Kind regards", "Sincerely", "Yours faithfully", "Tks & Best Regards", "Ευχαριστώ", "Ευχαριστώ πολύ", "Με εκτίμηση" or similar.
+2. After the closing greeting phrase, keep only the next line conatining the senders' name. This is the "name line".
+3. Delete everything after the name line, including phone numbers, job titles, company names, addresses, disclaimers, antivirus messages, footers, device signatures or blank lines.
+4. If no signature line is detected, delete any irrelevant content at the end of the email body such as disclaimers, antivirus messages, footers, device signatures or blank lines.
                                                   
-Important Rules:
-- Copy the body text exactly as it is written. Do not remove or add spaces, do not merge lines, do not change punctuation, and do not alter line breaks. Preserve all formatting exactly. 
-- Output must start with "From:" and end strictly with the greeting phrase + newline + senders' name + newline + ---End of email---".
+Output Rules:
+- Copy the email body exactly as it appears before the closing greeting, without altering spaces, punctuation, line breaks, or formatting.
+- If a signature exists (greeting + name line), the output must start with "From:" and end strictly with the greeting phrase + newline + sender's name + newline + ---End of email---". 
+- If no signature exists, the output must end strictly with newline + "---End of email---".
 
 Example:
 Input: 
@@ -272,7 +273,7 @@ Cc: Sales Department
 Subject: Upcoming Shipment
 Body: Hello Mary,
 This is to inform you about the upcoming shipment.
-Thanks and Best regards
+Thanks and Best regards,
 John
 Export Manager
 Company XYZ Ltd.
@@ -288,7 +289,7 @@ Cc: Sales Department
 Subject: Upcoming Shipment
 Body: Hello Mary,
 This is to inform you about the upcoming shipment.
-Thanks and Best regards
+Thanks and Best regards,
 John
 ---End of email---                                                
                                                          

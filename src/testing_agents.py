@@ -2,7 +2,6 @@ import os, json
 import torch
 import re
 from email import message_from_string
-from transformers import pipeline
 from dotenv import load_dotenv
 from time import time
 
@@ -65,14 +64,16 @@ if __name__ == "__main__":
 
     # tokenizer2 = AutoTokenizer.from_pretrained(model_name2)
 
-    email_text = """Your email text goes here"""
-
-    prompt="""Translate this email text to english. Output must start with 'From:' and end with '\n---End of email--- Process the following email:
-<|eot_id|>
-<|start_header_id|>user<|end_header_id|>
-{email}
-<|eot_id|>
-<|start_header_id|>assistant<|end_header_id>"""
+    email_text = """Στις 27/12/2023 1:31 μ.μ., ο/η Mairy Meni έγραψε:
+Καλησπερα σας , Χρονια πολλα 
+θα επανελθουμε με τα στοιχεια της κρατησης  για το εν θεματι φορτιο 
+IMPORTANT 
+Kind regards
+Mairy Meni (Ms.)
+Export Operations Department
+Arian Maritime S.A.
+133A Filonos street | Piraeus-Greece 18536
+"""
 
     formatted_email = clean_email_llm(email_text, prompt=formatting_headers_prompt, model=model, tokenizer=tokenizer, trace_name="format_email_headers", device=device0)
     print("\n\nFormatted email:\n", formatted_email)

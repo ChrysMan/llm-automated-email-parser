@@ -8,7 +8,7 @@ from utils.graph_utils import read_json_file, write_file
 try:
     json_sentences = read_json_file('/home/chryssida/DATA_TUC-KRITI/SEA IMPORT/234107/234107.json')
     
-    email_texts = [f"sender: {item.get('sender','')}\nsent:{item.get('sent','')}\nto:{item.get('to','')}\ncc:{item.get('cc','')}\nsubject:{item.get('subject','')}\nbody:{item.get('body','')}" 
+    email_texts = [f"from: {item.get('from','')}\nsent: {item.get('sent','')}\nto:{item.get('to','')}\ncc:{item.get('cc','')}\nsubject:{item.get('subject','')}\nbody:{item.get('body','')}" 
               for item in json_sentences]
 except Exception as e:
     LOGGER.error(f"Failed to read JSON file: {e}")
@@ -38,7 +38,7 @@ if email_texts:
         matched_index = Ind[0][0]
         mathed_email = unique_emails[matched_index]
 
-        if similarity < 0.96:
+        if similarity < 0.99:
             index.add(embedding)
             unique_emails.append(email)
         else:

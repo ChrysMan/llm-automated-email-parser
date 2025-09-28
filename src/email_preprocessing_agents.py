@@ -45,8 +45,8 @@ if __name__ == "__main__":
         attn_implementation="sdpa",
         device_map="auto",
         max_memory={
-            2: "16GB",   # allow GPU 0
-            3: "16GB"    # allow GPU 1
+            0: "16GB",   # allow GPU 0
+            1: "16GB"    # allow GPU 1
         }
     )#.to(device0)
 
@@ -89,6 +89,7 @@ if __name__ == "__main__":
                     msg = message_from_string(cleaned_from_headers)
                     email_dict = {
                     "from": msg["From"],
+                    "sent": msg["Sent"],
                     "to": msg["To"],
                     "cc" : msg["Cc"],
                     "subject": msg["Subject"],
