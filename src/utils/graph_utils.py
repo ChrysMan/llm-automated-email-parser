@@ -56,7 +56,7 @@ def clean_data(text: str) -> str:
     """ Cleans the text data by removing unnecessary spaces, new lines and unecessary data. """
     flags = re.MULTILINE | re.IGNORECASE
     clean_text = text.replace("--", "").replace('"\'', '"').replace('\'"', '"').replace("：", ":").replace("！", "!").replace("，", ",")
-    clean_text = re.sub(r"<image\d+\.(jpg|png)>|re: *|回复: *|Σχετ.: *|__+|FW: ", "", clean_text, flags=re.IGNORECASE)
+    clean_text = re.sub(r"<image\d+\.(jpg|png)>|re: *|回复: *|Σχετ.: *|__+|FW:\s*|Fwd:\s*", "", clean_text, flags=re.IGNORECASE)
     clean_text = re.sub(r"^[ \t]+", "", clean_text, flags=re.MULTILINE)
     clean_text = re.sub(r"^发件人:", "From: ", clean_text, flags=re.MULTILINE)
     clean_text = re.sub(r"^发送日期:|^发送时间:", "Sent: ", clean_text, flags=re.MULTILINE)
@@ -64,7 +64,28 @@ def clean_data(text: str) -> str:
     clean_text = re.sub(r"^抄送人:|^抄送:", "Cc: ", clean_text, flags=re.MULTILINE)
     clean_text = re.sub(r"^主题:", "Subject: ", clean_text, flags=re.MULTILINE)
     clean_text = re.sub(r"^Date:", "Sent:", clean_text, flags=re.MULTILINE) 
-    clean_text = re.sub(r"Tel\s*:\s*.+$|^(T|M)\s*:\s*\+*.+$|^E(-)?mail\s*:.*$|Website\s*:.*$|Web\s*: .+$|Address\s*:.+$|Fax\s*:.+$|P\.*s\.*\s*:.+$|mob\.\+*.+\s*$|Mobile\s*:.+$|Phone\s*:\s*.*$|Disclaimer\s*:.+$|^Στάλθηκε από το Ταχυδρομείο.+$|^Sent from my.+$|地址\s*:.+$|分公司\s*:.+$|This message is sent from my mob* device|^<htt*|Fwd:\s*", "", clean_text, flags=flags)
+
+    pattern = r"""<mailto:.*>|
+Tel\s*:.*|
+(T|M)\s*:.*|
+E(-)?mail\s*:.*|
+Skype\s*:.*|
+Dir\s*:.*|
+Website\s*:.*|
+Web\s*:.*|
+Address\s*:.*|
+Fax\s*:.*|
+mob\..*|
+Mobile\s*:.*|
+Phone\s*:.*|
+P\.*s\.*\s*:.*$|
+Disclaimer\s*:.*|
+Στάλθηκε από το Ταχυδρομείο.*|
+Sent from my.*|
+地址\s*:.*|
+分公司\s*:.*|
+This message is sent from my mob* device"""
+    clean_text = re.sub(pattern , "", clean_text, flags=flags)
     clean_text = re.sub(r"\n\s*\n*", "\n", clean_text)
     return clean_text
 

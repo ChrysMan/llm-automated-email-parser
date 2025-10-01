@@ -26,9 +26,9 @@ from agents.translator_agent import translate_email_llm
 
 if __name__ == "__main__":
     tic1 = time()
-    model_name = "Qwen/Qwen2.5-7B-Instruct"
+    #model_name = "Qwen/Qwen2.5-7B-Instruct"
     #model_name = "Qwen/Qwen3-30B-A3B-Instruct-2507"
-    #model_name = "Qwen/Qwen2.5-14B-Instruct"
+    model_name = "Qwen/Qwen2.5-14B-Instruct"
     model_name2 = "LuvU4ever/qwen2.5-3b-qlora-merged-v4"
     #model_name2 = "facebook/seamless-m4t-v2-large"
     #model_name2 = "Helsinki-NLP/opus-mt-mul-en"
@@ -48,8 +48,8 @@ if __name__ == "__main__":
         attn_implementation="sdpa",
         device_map="auto",
         max_memory={
-            0: "16GB",   # allow GPU 0
-            1: "16GB"    # allow GPU 1
+            2: "16GB",   # allow GPU 0
+            3: "16GB"    # allow GPU 1
         }
     )#.to(device0)
 
@@ -64,22 +64,18 @@ if __name__ == "__main__":
 
     # tokenizer2 = AutoTokenizer.from_pretrained(model_name2)
 
-    email_text = """Στις 27/12/2023 1:31 μ.μ., ο/η Mairy Meni έγραψε:
-Καλησπερα σας , Χρονια πολλα 
-θα επανελθουμε με τα στοιχεια της κρατησης  για το εν θεματι φορτιο 
-IMPORTANT 
-Kind regards
-Mairy Meni (Ms.)
-Export Operations Department
-Arian Maritime S.A.
-133A Filonos street | Piraeus-Greece 18536
-"""
+    email_text = """From: Nikolopoulos O.E. <nikolopoulos@nikolopoulos.gr> 
+Sent: Πέμπτη, 16 Φεβρουαρίου 2023 1:38 μμ
+To: Philemon Lerias <plerias@arianmaritime.gr>
+Cc: Sissy Vasilopoulou <operations2@arianmaritime.gr>; Marina Koletzaki <mkoletzaki@arianmaritime.gr>; Aris Aristou <aaristou@arianmaritime.gr>
+Subject: ARIAN REF 230009: Quote - BTRFLY-000312 , Greece-USA, DoorToDoor shipment 
+ok"""
 
-    formatted_email = clean_email_llm(email_text, prompt=formatting_headers_prompt, model=model, tokenizer=tokenizer, trace_name="format_email_headers", device=device0)
-    print("\n\nFormatted email:\n", formatted_email)
-    LOGGER.info(f"Time taken to process: {time() - tic1} seconds")
+    # formatted_email = clean_email_llm(email_text, prompt=formatting_headers_prompt, model=model, tokenizer=tokenizer, trace_name="format_email_headers", device=device0)
+    # print("\n\nFormatted email:\n", formatted_email)
+    # LOGGER.info(f"Time taken to process: {time() - tic1} seconds")
 
-    translated_email = clean_email_llm(formatted_email, prompt=translator_prompt_template , model=model, tokenizer=tokenizer, trace_name="translate_format_email", device=device0)
+    translated_email = clean_email_llm(email_text, prompt=translator_prompt_template , model=model, tokenizer=tokenizer, trace_name="translate_format_email", device=device0)
     print("\n\nTranslated email:\n", translated_email)
     LOGGER.info(f"Time taken to process: {time() - tic1} seconds") 
 

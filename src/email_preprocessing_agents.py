@@ -30,7 +30,7 @@ if __name__ == "__main__":
 
     #model_tag = "meta-llama/Llama-3.1-8B-Instruct"
     model_name = "Qwen/Qwen2.5-7B-Instruct"
-    model_name2 = "LuvU4ever/qwen2.5-3b-qlora-merged-v4"
+    #model_name2 = "LuvU4ever/qwen2.5-3b-qlora-merged-v4"
 
     if torch.cuda.is_available():
         num_gpus = torch.cuda.device_count()
@@ -45,8 +45,8 @@ if __name__ == "__main__":
         attn_implementation="sdpa",
         device_map="auto",
         max_memory={
-            0: "16GB",   # allow GPU 0
-            1: "16GB"    # allow GPU 1
+            2: "16GB",   # allow GPU 0
+            3: "16GB"    # allow GPU 1
         }
     )#.to(device0)
 
@@ -70,9 +70,13 @@ if __name__ == "__main__":
             tic2 = time()
 
             try:
-                raw_msg_content = extract_msg_file(file_path)
-                cleaned_msg_content = clean_data(raw_msg_content)
-                splitted_emails = split_email_thread(cleaned_msg_content)
+                 with open("/home/chryssida/src/Texts/AE-230009-split.txt", "a") as f:
+                    raw_msg_content = extract_msg_file(file_path)
+                    cleaned_msg_content = clean_data(raw_msg_content)
+                    splitted_emails = split_email_thread(cleaned_msg_content)
+
+                    joined = "\n-***-\n".join(splitted_emails)
+                    f.write(joined)
             except Exception as e:
                 LOGGER.error(f"Failed to extract or clean email from {filename}: {e}")
                 continue
@@ -81,6 +85,7 @@ if __name__ == "__main__":
                 count = 0
                 for email in splitted_emails:
                     count += 1
+                    
                     formatted_email = clean_email_llm(email, prompt=formatting_headers_prompt, model=model, tokenizer=tokenizer, trace_name="format_email_headers", device=device0)
                     translated_email = clean_email_llm(formatted_email, prompt=translator_prompt_template, model=model, tokenizer=tokenizer, trace_name=f"translate_{filename}_{count}", device=device0)
                     cleaned_from_signatures = clean_email_llm(translated_email, prompt=signature_cleaning_prompt, model=model, tokenizer=tokenizer, trace_name=f"clean_sigantures_{filename}_{count}", device=device0)
