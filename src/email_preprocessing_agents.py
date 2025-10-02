@@ -29,7 +29,7 @@ if __name__ == "__main__":
     output_path = os.path.join(dir_path, f"{folder_name}.json")
 
     #model_tag = "meta-llama/Llama-3.1-8B-Instruct"
-    model_name = "Qwen/Qwen2.5-7B-Instruct"
+    model_name = "Qwen/Qwen2.5-14B-Instruct"
     #model_name2 = "LuvU4ever/qwen2.5-3b-qlora-merged-v4"
 
     if torch.cuda.is_available():
@@ -45,6 +45,7 @@ if __name__ == "__main__":
         attn_implementation="sdpa",
         device_map="auto",
         max_memory={
+            0: "16GB",  # allow GPU 1
             2: "16GB",   # allow GPU 0
             3: "16GB"    # allow GPU 1
         }
@@ -70,7 +71,7 @@ if __name__ == "__main__":
             tic2 = time()
 
             try:
-                 with open("/home/chryssida/src/Texts/AE-230009-split.txt", "a") as f:
+                 with open("/home/chryssida/src/Texts/SI-231870-split.txt", "a") as f:
                     raw_msg_content = extract_msg_file(file_path)
                     cleaned_msg_content = clean_data(raw_msg_content)
                     splitted_emails = split_email_thread(cleaned_msg_content)
@@ -100,8 +101,6 @@ if __name__ == "__main__":
                     "subject": msg["Subject"],
                     "body": msg.get_payload()
                     }
-                    #extracted_info = extract_email_llm(cleaned_from_headers, prompt=extraction_prompt, model=model, tokenizer=tokenizer, trace_name=f"extract_{filename}_{count}", device=device0)
-                    #print(f"\n\nEmail Info {count} from {filename}: {cleaned_headers_email}")
                     email_data.append(email_dict)
             except Exception as e:
                 LOGGER.error(f"Failed to clean or extract email from {filename}: {e}")
@@ -109,10 +108,6 @@ if __name__ == "__main__":
 
             LOGGER.info(f"Time taken to process {filename}: {time() - tic2} seconds")
         
-    #partially_unique_emails = list(set(email_data))
-    #print("\nLength of emails before set", len(email_data))
-    #print("\nLength of emails after set", len(partially_unique_emails))
-    
     with open(output_path, "w", encoding="utf-8") as file:
         json.dump(email_data, file, indent=4, ensure_ascii=False, default=str)
 
