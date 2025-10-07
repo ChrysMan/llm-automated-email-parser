@@ -29,7 +29,7 @@ if __name__ == "__main__":
     output_path = os.path.join(dir_path, f"{folder_name}.json")
 
     #model_tag = "meta-llama/Llama-3.1-8B-Instruct"
-    model_name = "Qwen/Qwen2.5-14B-Instruct"
+    model_name = "Qwen/Qwen2.5-7B-Instruct"
     #model_name2 = "LuvU4ever/qwen2.5-3b-qlora-merged-v4"
 
     if torch.cuda.is_available():
@@ -45,7 +45,6 @@ if __name__ == "__main__":
         attn_implementation="sdpa",
         device_map="auto",
         max_memory={
-            0: "16GB",  # allow GPU 1
             2: "16GB",   # allow GPU 0
             3: "16GB"    # allow GPU 1
         }

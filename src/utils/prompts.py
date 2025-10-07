@@ -272,7 +272,7 @@ From: johndoe@gmail.com
 Sent: Friday, December 29, 2023 14:09 PM
 To: 刘业; Hara Papadopoulou
 Cc: Sales Department
-Subject: Upcoming Shipment
+Subject: Upcoming Schipment
 Hello Mary,
 This is to inform you about the upcoming shipment.
 Thanks and Best regards,
