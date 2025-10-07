@@ -1,9 +1,29 @@
 import spacy, faiss, os
+import numpy as np
 from utils.logging_config import LOGGER
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings.spacy_embeddings import SpacyEmbeddings
 
 FAISS_DB_PATH = "/home/chryssida/src/faiss_db.index"
+
+def retrieve_with_normalized_scores(query: str, k: int = 5, score_threshold: float = 0.0):
+    """
+    Returns top-k documents with cosine similarity.
+    Only returns results above score_threshold.
+    """
+    query_embedding = embedder.embed_query(query)
+    query_embedding = np.array(query_embedding, dtype=np.float32).reshape(1, -1)
+    
+    faiss.normalize_L2(query_embedding)
+    
+    results = vectorstore.similarity_search_with_score_by_vector(query_embedding[0], k=k)
+    
+    # Normalize similarity scores to [0,1]
+    #normalized_results = [(doc, (score + 1) / 2) for doc, score in results]
+    
+    filtered_results = [(doc, score) for doc, score in results if score >= score_threshold]
+    
+    return filtered_results
 
 if __name__ == "__main__":
     if os.path.exists(FAISS_DB_PATH):
@@ -22,10 +42,12 @@ if __name__ == "__main__":
         if query.lower() == 'exit':
             break
 
-        docs = retriever.invoke(query)
-        emails = [doc.page_content for doc in docs]
+        #docs = retriever.invoke(query)
+        #emails = [doc.page_content for doc in docs]
+
+        results = retrieve_with_normalized_scores(query, k=6, score_threshold=0.4)
 
         print("\nTop similar emails:")
-        for i in range(len(emails)):
-            print(f"\nEmail {i+1}:\n{emails[i]}\n")
+        for i ,(doc, score) in enumerate(results, 1):
+            print(f"\nEmail {i}, Score {score:.4f}:\n{doc.page_content}\n")
         
