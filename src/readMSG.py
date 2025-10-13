@@ -2,40 +2,11 @@ import os
 import extract_msg, re
 from utils.graph_utils import extract_msg_file, clean_data, split_email_thread
 
-directory = "/home/chryssida/DATA_TUC-KRITI/AIR EXPORT/230009/"
-output_file = "/home/chryssida/src/Texts/AE-230009-info.txt"
-output_file2 = "/home/chryssida/src/Texts/AE-230009-cleaned.txt"
-output_file3 = "/home/chryssida/src/Texts/AE-230009-split.txt"
+directory = "/home/chryssida/DATA_TUC-KRITI/AIR IMPORT/231630/"
+output_file = "/home/chryssida/src/Texts/AI-231630-info.txt"
+output_file2 = "/home/chryssida/src/Texts/AI-231630-cleaned.txt"
+output_file3 = "/home/chryssida/src/Texts/AI-231630-split.txt"
 
-
-def split_email_chain(clean_text):
-    # Find all occurrences of reply headers
-    matches = list(separator.finditer(clean_text))
-
-    # If no matches, return the whole email as one part
-    if not matches:
-        return [clean_text.strip()]
-
-    # Store the email parts
-    email_parts = []
-    prev_end = 0
-
-    for match in matches:
-        start = match.start()
-
-        # Get the section from the previous end up to this header
-        part = clean_text[prev_end:start].strip()
-        if part:
-            email_parts.append(part)
-
-        prev_end = start  # Next part starts from this header
-
-    # Add the last section of the email (from the last header to the end)
-    last_part = clean_text[prev_end:].strip()
-    if last_part:
-        email_parts.append(last_part)
-
-    return email_parts
 
 try:
     with open(f"{output_file3}", "w") as f:

@@ -6,7 +6,7 @@ from utils.logging_config import LOGGER
 from email import message_from_string
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from utils.graph_utils import extract_msg_file, clean_data, split_email_thread
-from agents.preprocessing_agent import extract_email_llm,clean_email_llm
+from agents.preprocessing_agent import clean_email_llm
 from utils.prompts import formatting_headers_prompt, translator_prompt_template, headers_cleaning_prompt, signature_cleaning_prompt,extraction_prompt
 
 if __name__ == "__main__":
@@ -29,7 +29,7 @@ if __name__ == "__main__":
     output_path = os.path.join(dir_path, f"{folder_name}.json")
 
     #model_tag = "meta-llama/Llama-3.1-8B-Instruct"
-    model_name = "Qwen/Qwen2.5-7B-Instruct"
+    model_name = "Qwen/Qwen2.5-14B-Instruct"
     #model_name2 = "LuvU4ever/qwen2.5-3b-qlora-merged-v4"
 
     if torch.cuda.is_available():
@@ -45,21 +45,13 @@ if __name__ == "__main__":
         attn_implementation="sdpa",
         device_map="auto",
         max_memory={
+            1: "16GB",  # allow GPU 1
             2: "16GB",   # allow GPU 0
             3: "16GB"    # allow GPU 1
         }
     )#.to(device0)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-    # model2 = AutoModelForCausalLM.from_pretrained(
-    #     model_name2,
-    #     torch_dtype=torch.float16,
-    #     attn_implementation="sdpa"
-    #     #device_map="auto",
-    # ).to(device1)
-
-    # tokenizer2 = AutoTokenizer.from_pretrained(model_name2)
 
     email_data = []
 
@@ -70,7 +62,7 @@ if __name__ == "__main__":
             tic2 = time()
 
             try:
-                 with open("/home/chryssida/src/Texts/SI-231870-split.txt", "a") as f:
+                 with open("/home/chryssida/src/Texts/AI-231630-split.txt", "a") as f:
                     raw_msg_content = extract_msg_file(file_path)
                     cleaned_msg_content = clean_data(raw_msg_content)
                     splitted_emails = split_email_thread(cleaned_msg_content)
