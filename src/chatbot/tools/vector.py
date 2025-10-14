@@ -1,34 +1,18 @@
 import os
 from dotenv import load_dotenv
 load_dotenv()
-
-from langchain_openai import ChatOpenAI
-from langchain_openai import OpenAIEmbeddings
-from langchain_neo4j import Neo4jGraph, Neo4jVector
+from llm import llm, embedding_provider
+from graph import graph
+from langchain_neo4j import Neo4jVector
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains.retrieval import create_retrieval_chain
 from langchain_core.prompts import ChatPromptTemplate
 
-llm = ChatOpenAI(
-    openai_api_key=os.getenv('OPENAI_API_KEY'), 
-    temperature=0
-)
-
-embedding_provider = OpenAIEmbeddings(
-    openai_api_key=os.getenv('OPENAI_API_KEY')
-    )
-
-graph = Neo4jGraph(
-    url=os.getenv('NEO4J_URI'),
-    username=os.getenv('NEO4J_USERNAME'),
-    password=os.getenv('NEO4J_PASSWORD')
-)
-
 chunk_vector = Neo4jVector.from_existing_index(
     embedding_provider,
     graph=graph,
-    index_name="chunkVector",
-    embedding_node_property="textEmbedding",
+    index_name="vector",
+    embedding_node_property="embedding",
     text_node_property="text",
     retrieval_query="""
 // get the document
@@ -82,5 +66,5 @@ chunk_retriever = create_retrieval_chain(
 def find_chunk(q):
     return chunk_retriever.invoke({"input": q})
 
-while (q := input("> ")) != "exit":
-    print(find_chunk(q))
+# while (q := input("> ")) != "exit":
+#     print(find_chunk(q))

@@ -1,21 +1,12 @@
 import os
-from langchain_openai import ChatOpenAI
-from langchain_neo4j import GraphCypherQAChain, Neo4jGraph
-from langchain.prompts import PromptTemplate
-
 from dotenv import load_dotenv
 load_dotenv()
 
-llm = ChatOpenAI(
-    openai_api_key=os.getenv('OPENAI_API_KEY'), 
-    temperature=0
-)
+from llm import llm
+from graph import graph
 
-graph = Neo4jGraph(
-    url=os.getenv('NEO4J_URI'),
-    username=os.getenv('NEO4J_USERNAME'),
-    password=os.getenv('NEO4J_PASSWORD')
-)
+from langchain_neo4j import GraphCypherQAChain
+from langchain.prompts import PromptTemplate
 
 CYPHER_GENERATION_TEMPLATE = """Task:Generate Cypher statement to query a graph database.
 Instructions:
@@ -27,6 +18,17 @@ Always use case insensitive search when matching strings.
 
 Schema:
 {schema}
+
+Examples: 
+# Use case insensitive matching for entity ids
+MATCH (c:Chunk)-[:HAS_ENTITY]->(e)
+WHERE e.id =~ '(?i)entityName'
+RETURN e.id
+
+# Find documents that reference entities
+MATCH (d:Document)<-[:PART_OF]-(c:Chunk)-[:HAS_ENTITY]->(e)
+WHERE e.id =~ '(?i)entityName'
+RETURN d.id, c.id, c.text, e.id
 
 The question is:
 {question}"""
@@ -45,7 +47,8 @@ cypher_chain = GraphCypherQAChain.from_llm(
 )
 
 def run_cypher(q):
-    return cypher_chain.invoke({"query": q})
-
-while (q := input("> ")) != "exit":
-    print(run_cypher(q))
+    cypher_chain.invoke({"query": q})
+    
+# while (q := input("> ")) != "exit":
+#     print(run_cypher(q))
+  
