@@ -46,7 +46,7 @@ conda activate myvenv
 ```
 #### For Windows (Command Prompt): 
 ```sh
-venv\Scripts\activate 
+myvenv\Scripts\activate 
 ```
 or
 ```sh
