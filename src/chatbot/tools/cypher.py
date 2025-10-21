@@ -37,8 +37,10 @@ Where the relationship "Emails" refers to email addresses and relationship "Chun
 The question is:
 {question}"""
 
-nodes = graph.query("""CALL db.schema.nodeTypeProperties() YIELD nodeLabels, propertyName
-RETURN nodeLabels, collect(distinct propertyName) AS properties""")
+nodes = graph.query("""
+    CALL db.schema.nodeTypeProperties() 
+    YIELD nodeLabels, propertyName
+    RETURN nodeLabels, collect(distinct propertyName) AS properties""")
 
 relationships=graph.query(
     """CALL db.schema.relTypeProperties()
@@ -50,6 +52,7 @@ node_str = "\n".join(
     for n in nodes
 )
 rel_str = ", ".join(f"{rel.replace(":","").replace("`","")}" for rel in relationships)
+
 graph_schema = f"""Node Types and their Properties:
 {node_str}
 Relationship Types:
