@@ -1,8 +1,9 @@
-import os
+import os, re
+from time import time
 from dotenv import load_dotenv
 load_dotenv()
 
-from llm import llm
+from llm import llm, qa_llm, cypher_llm
 from graph import graph
 
 from langchain_neo4j import GraphCypherQAChain
@@ -13,42 +14,74 @@ Instructions:
 Use only the provided relationship types and properties in the schema.
 Do not use any other relationship types or properties that are not provided.
 Only include the generated Cypher statement in your response.
+Do NOT add any explanation or comments outside the Cypher query.
 
-Always use case insensitive search when matching strings.
-
-Schema:
-{schema}
+Always use case insensitive search when matching strings. 
 
 Examples: 
 # Use case insensitive matching for entity ids
 MATCH (c:Chunk)-[:HAS_ENTITY]->(e)
-WHERE e.id =~ '(?i)entityName'
+WHERE e.id =~ '(?i).*entityName.*'
 RETURN e.id
 
 # Find documents that reference entities
 MATCH (d:Document)<-[:PART_OF]-(c:Chunk)-[:HAS_ENTITY]->(e)
-WHERE e.id =~ '(?i)entityName'
+WHERE e.id =~ '(?i).*entityName.*'
 RETURN d.id, c.id, c.text, e.id
+
+Schema:
+{schema}
+
+Where the relationship "Emails" refers to email addresses and relationship "Chunk" refers to the actual email content.
 
 The question is:
 {question}"""
 
+nodes = graph.query("""CALL db.schema.nodeTypeProperties() YIELD nodeLabels, propertyName
+RETURN nodeLabels, collect(distinct propertyName) AS properties""")
+
+relationships=graph.query(
+    """CALL db.schema.relTypeProperties()
+    YIELD relType
+    RETURN collect(distinct relType) AS rels""")[0]["rels"]
+
+node_str = "\n".join(
+    f"- {','.join(n['nodeLabels'])} (properties: {', '.join(n['properties'])})"
+    for n in nodes
+)
+rel_str = ", ".join(f"{rel.replace(":","").replace("`","")}" for rel in relationships)
+graph_schema = f"""Node Types and their Properties:
+{node_str}
+Relationship Types:
+{rel_str}"""
+
+#print("\nGraph Schema:\n", graph_schema)
+
 cypher_generation_prompt = PromptTemplate(
     template=CYPHER_GENERATION_TEMPLATE,
-    input_variables=["schema", "question"],
+    input_variables=["question"], 
+    partial_variables={"schema": graph_schema} 
 )
 
 cypher_chain = GraphCypherQAChain.from_llm(
-    llm,
+    qa_llm=qa_llm,
+    cypher_llm=cypher_llm,
     graph=graph,
     cypher_prompt=cypher_generation_prompt,
+    validate_cypher = True,
     verbose=True,
     allow_dangerous_requests=True
 )
 
+# def run_cypher(q):
+#     cypher_chain.invoke({"query": q})
+
 def run_cypher(q):
-    cypher_chain.invoke({"query": q})
-    
-# while (q := input("> ")) != "exit":
-#     print(run_cypher(q))
+    result =  cypher_chain.invoke({"query": q})
+    return result
+
+while (q := input("> ")) != "exit":
+    tic1 = time()
+    print(run_cypher(q))
+    print(f"Time taken to process: {time() - tic1} seconds")
   

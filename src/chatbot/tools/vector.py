@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 load_dotenv()
-from llm import llm, embedding_provider
+from llm import qa_llm, embedding_provider
 from graph import graph
 from langchain_neo4j import Neo4jVector
 from langchain.chains.combine_documents import create_stuff_documents_chain
@@ -11,8 +11,8 @@ from langchain_core.prompts import ChatPromptTemplate
 chunk_vector = Neo4jVector.from_existing_index(
     embedding_provider,
     graph=graph,
-    index_name="vector",
-    embedding_node_property="embedding",
+    index_name="chunkVector",
+    embedding_node_property="textEmbedding",
     text_node_property="text",
     retrieval_query="""
 // get the document
@@ -56,8 +56,8 @@ prompt = ChatPromptTemplate.from_messages(
     ]
 )
 
-chunk_retriever = chunk_vector.as_retriever()
-chunk_chain = create_stuff_documents_chain(llm, prompt)
+chunk_retriever = chunk_vector.as_retriever(search_type="similarity", search_kwargs={"k":10})
+chunk_chain = create_stuff_documents_chain(qa_llm, prompt)
 chunk_retriever = create_retrieval_chain(
     chunk_retriever, 
     chunk_chain
@@ -66,5 +66,5 @@ chunk_retriever = create_retrieval_chain(
 def find_chunk(q):
     return chunk_retriever.invoke({"input": q})
 
-# while (q := input("> ")) != "exit":
-#     print(find_chunk(q))
+while (q := input("> ")) != "exit":
+    print(find_chunk(q))

@@ -2,7 +2,6 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-# tag::llm[]
 # Create the LLM
 from langchain_ollama import ChatOllama
 
@@ -16,9 +15,17 @@ llm = ChatOllama(
     model=model,
     temperature=0
 )
-# end::llm[]
 
-# tag::embedding[]
+qa_llm = ChatOllama(
+    model="qwen2.5:14b",
+    temperature=0.2
+)
+
+cypher_llm = ChatOllama(
+    model="qwen2.5:14b",    
+    temperature=0
+)
+
 # Create the Embedding model
 from langchain_ollama import OllamaEmbeddings
 

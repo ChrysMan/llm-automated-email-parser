@@ -30,8 +30,8 @@ tools = [
         func=kg_chat.invoke,
     ), 
     Tool.from_function(
-        name="Lesson content search",
-        description="For when you need to find information in the lesson content",
+        name="Email content search",
+        description="For when you need to find information in the Email content",
         func=find_chunk, 
     ),
     Tool.from_function(
