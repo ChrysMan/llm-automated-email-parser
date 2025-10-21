@@ -85,14 +85,14 @@ python email_preprocessing_agent /path/to/your/data/directory
 #### First approach: RAG on Vector Database
 ```sh
 # Create a vector database from a deduplicated email list
-python create_embeddings.py
+python create_vectorDB_spaCyfaiss.py /path/to/your/data/file
 # Run Retrieval-Augmented Generation (RAG) on the vector database
 python rag_embedDB.py
 ```
 #### Second approach: RAG on Knowledge Graph
 ```sh
 # Create Neo4j knowledge graph from emails
-python create_kg.py
+python create_kg.py /path/to/your/data/directory
 # Run the bot with an agent implementing RAG on the knowledge graph
 python bot.py  
 ```
