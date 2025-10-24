@@ -30,24 +30,24 @@ def create_token_batches(chunks, max_tokens=10000):
         batches.append(current_batch)
     return batches
 
-def process_chunk(email_chunk, embedding, doc_transformer, graph):
-    filename = os.path.splitext(os.path.basename(email_chunk.metadata["source"]))[0]
-    chunk_id = f"{filename}.{email_chunk.metadata["seq_num"]}"
-    #doc_id = os.path.splitext(filename)[0]
-    #email_chunk.metadata["doc_id"] = doc_id
+def process_chunk(chunk, embedding, doc_transformer, graph, reference_number):
+    filename = os.path.splitext(os.path.basename(chunk.metadata["source"]))[0]
+    chunk_id = f"{filename}.{chunk.metadata["seq_num"]}"
 
     # Add the Document and Chunk nodes to the graph
     properties = {
         "filename": filename,
+        "referenceNumber": reference_number,
         "chunk_id": chunk_id,
-        #"doc_id" : doc_id,
-        "text": email_chunk.page_content,
+        "text": chunk.page_content,
         "embedding": embedding
     }
-    
+
     graph.query("""
         MERGE (d:Document {id: $filename})
-        MERGE (c:EmailChunk {id: $chunk_id})
+        MERGE (r:ReferenceNumber {value: $referenceNumber})
+        MERGE (d)-[:HAS_REFERENCE_NUMBER]->(r)
+        MERGE (c:Chunk {id: $chunk_id})
         SET c.text = $text
         MERGE (d)<-[:PART_OF]-(c)
         WITH c
@@ -57,13 +57,13 @@ def process_chunk(email_chunk, embedding, doc_transformer, graph):
     )
 
     # Generate the entities and relationships from the chunk
-    graph_docs = doc_transformer.convert_to_graph_documents([email_chunk])
+    graph_docs = doc_transformer.convert_to_graph_documents([chunk])
 
     # Map the entities in the graph documents to the chunk node
     for graph_doc in graph_docs:
         chunk_node = Node(
             id=chunk_id,
-            type="EmailChunk"
+            type="Chunk"
         )
 
         for node in graph_doc.nodes:
@@ -118,16 +118,16 @@ async def main():
     )
 
     allowed_relationships1 = [
-        ("EmailChunk", "HAS_ENTITY", "EmailAddress"),
-        ("EmailChunk", "HAS_ENTITY", "Person"),
-        ("EmailChunk", "HAS_ENTITY", "Reference_Number"),
-        ("EmailChunk", "SENT_BY", "EmailAddress"),
-        ("EmailChunk", "SENT_TO", "EmailAddress"),
-        ("EmailChunk", "CC_TO", "EmailAddress"),
-        ("EmailChunk", "SENT_AT", "Date"),
-        ("EmailChunk", "SENT_BY", "Person"),
-        ("EmailChunk", "SENT_TO", "Person"),
-        ("EmailChunk", "CC_TO", "Person"),
+        ("Chunk", "HAS_ENTITY", "EmailAddress"),
+        ("Chunk", "HAS_ENTITY", "Person"),
+        ("Chunk", "HAS_ENTITY", "Reference_Number"),
+        ("Chunk", "SENT_BY", "EmailAddress"),
+        ("Chunk", "SENT_TO", "EmailAddress"),
+        ("Chunk", "CC_TO", "EmailAddress"),
+        ("Chunk", "SENT_AT", "Date"),
+        ("Chunk", "SENT_BY", "Person"),
+        ("Chunk", "SENT_TO", "Person"),
+        ("Chunk", "CC_TO", "Person"),
         ("Person", "OWNER_OF", "EmailAddress"),
         ("Person", "WORKS_AT", "Organization"),
         ("Person", "CORRESPONDENCE", "Person"),
@@ -160,15 +160,45 @@ async def main():
 You are extracting a knowledge graph from email text. 
 Prefer using the following schema when identifying entities and relationships:
 
-Entities: Document, Person, Organization, Location, Date, EmailAddress, Destination, Airport, Port, Product, Route, Attachment
+Entities: Document, Person, Organization, Location, Date, EmailAddress, Destination, Airport, Port, Product, Route, Attachment, Shipper, Shipment
 Relationships: HAS_ENTITY, WORKS_AT, SENT_TO, CCED, SHIPPED_BY, RECEIVED_BY, CORRESPONDENCE
 
 Rules:
-- Document node and EmailChunk nodes have been already created in the graph database, no need to create them again.
+- Document node and Chunk nodes have been already created in the graph database, no need to create them again.
 - You may define a new entity or relationship ONLY if it clearly adds new information not represented by the above list.
 - When introducing a new type, use descriptive names and keep them consistent across messages. 
 - Extract as many usefull information as possible from the email body text to populate the knowledge graph.
 - For additional information related to an entity (e.g., email address of a person, product ID, quantity, departure/arrival date of a shipment), store it as a property of the corresponding node instead of creating a separate node.
+
+I provide you with some acronyms and their meanings that are commonly used in shipping emails:
+ACY: AGENCY 
+AGN: AGENT	
+SHP: SHIPPER	
+CNE: CONSIGNEE	
+CL: CLIENT	
+TR: TRUCKER	
+INC: INCURANCE	
+BLF, HBLF, MBLF: BILL OF LADING FINAL
+BLD, HBLD, MBLD: BILL OF LADING DRAFT
+BLO, HBLO, MBLO: BILL OF LADING ORIGINAL
+DN: DEBIT NOTE
+CN: CREDIT NOTE
+COMD: COMMERCIAL DOCS
+PAD: PRE ADVISE DOCS
+PADD: PRE ADVISE DOCS * DRAFTS
+SI: SHIPPING INSTRUCTIONS / NOTE
+BN: BOOKING NOTE
+TICS: TICKETS 
+VCHR: VOUCHER 
+AN: ARRIVAL NOTICE
+DO: DELIVERY ORDER
+BA: BOOKING ASSIGNMENT
+SR: SELLING RATE
+BR: BUYING RATE
+RO: RELEASE ORDER
+COR: CORRESPONDENCE
+PAL: PRE ADVISE
+BC: BOOKING CONFIRMATION
 
 Example Input:
 {{  
@@ -205,6 +235,8 @@ Shipment: 123456
     shipper_organizations = ["Global Freight Ltd.", "SeaShipments Italia S.p.A."]
     from_port = "Port of Piraeus"
     to_port = "Port of Shanghai"
+Shipper: Global Freight Ltd.
+Shipper: SeaShipments Italia S.p.A.
 Date: Tuesday, May 30, 2023 10:36 AM
 Organization: Global Freight Ltd.
 Organization: SeaShipments Italia S.p.A.
@@ -222,12 +254,10 @@ Edges:
   - (Global Freight Ltd.) SHIPPER_OF (Shipment_Reference_Number: 123456)
   - (123456) SHIPPED_BY (Global Freight Ltd.)
   - (123456) RECEIVED_BY (SeaShipments Italia S.p.A.)
+  - (123456) SHIPS_TO (Port of Shanghai)
+  - (123456) SHIPPED_FROM (Port of Piraeus)
    """
 
-    # - Each document has a unique doc_id.
-    # - Create only one node of type "Document" per doc_id.
-    # - All entities and relationships from chunks belonging to the same doc_id must connect to this single Document node.
-    # - Never create multiple Document nodes for the same doc_id.
 
     doc_transformer = LLMGraphTransformer(
         llm=llm,
@@ -240,7 +270,7 @@ Edges:
 
     # Load and split the documents
     json_loader = DirectoryLoader(DOCS_PATH, glob="*unique.json", loader_cls=lambda path: JSONLoader(path, jq_schema=".[]", text_content=False), show_progress=True)
-    #pdf_loader = DirectoryLoader(DOCS_PATH, glob="**/*.pdf", loader_cls=PyPDFLoader, show_progress=True, use_multithreading=True)
+    pdf_loader = DirectoryLoader(DOCS_PATH, glob="*.pdf", loader_cls=PyPDFLoader, show_progress=True, use_multithreading=True)
 
     text_splitter = CharacterTextSplitter(
         separator="\n\n",
@@ -249,40 +279,63 @@ Edges:
     )
 
     json_docs = json_loader.load()
-    #json_chunks = text_splitter.split_documents(json_docs)
+    pdf_docs = pdf_loader.load()
+    pdf_chunks = text_splitter.split_documents(pdf_docs)
 
-    # Produce embeddings in batches
-    batches = create_token_batches(json_docs, max_tokens=10000)
-    tasks = [embedding_provider.aembed_documents([chunk.page_content for chunk in batch]) for batch in batches]
-    embeddings = await asyncio.gather(*tasks)
-    embeddings = [emb for batch in embeddings for emb in batch]
+    # Produce json embeddings in batches
+    json_batches = create_token_batches(json_docs, max_tokens=10000)
+    json_tasks = [embedding_provider.aembed_documents([chunk.page_content for chunk in batch]) for batch in json_batches]
+    json_embeddings = await asyncio.gather(*json_tasks)
+    json_embeddings = [emb for batch in json_embeddings for emb in batch]   # flatten
+
+    # Produce pdf embeddings in batches
+    pdf_batches = create_token_batches(pdf_chunks, max_tokens=10000)
+    pdf_tasks = [embedding_provider.aembed_documents([chunk.page_content for chunk in batch]) for batch in pdf_batches]
+    pdf_embeddings = await asyncio.gather(*pdf_tasks)
+    pdf_embeddings = [emb for batch in pdf_embeddings for emb in batch]     # flatten
+
+    # Combine the chunks and embeddings
+    final_chunks = json_docs + pdf_chunks
+    final_embeddings = json_embeddings + pdf_embeddings
 
     # Add Document node to the graph so it will be created once per document
-    doc_id = os.path.splitext(os.path.basename(json_docs[0].metadata["source"]))[0]
-    reference_number = doc_id.split("-")[0]  
-    graph.query("""MERGE (d:Document {id: $doc_id}) SET d.referenceNumber = $referenceNumber""", {"doc_id": doc_id, "referenceNumber": reference_number})
+    filename = os.path.splitext(os.path.basename(pdf_chunks[0].metadata["source"]))[0]
+    reference_number = os.path.basename(os.path.dirname(json_docs[0].metadata["source"]))
 
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = [
-            executor.submit(process_chunk, chunk, emb, doc_transformer, graph)
-            for chunk, emb in zip(json_docs, embeddings)
-        ]
+    filenames = set([os.path.splitext(os.path.basename(pdf_chunk.metadata["source"]))[0] for pdf_chunk in pdf_chunks])
+    #filenames = [filename for filename in os.listdir(DOCS_PATH) if filename.endswith(".pdf")]
+    print("Loaded pdf docs:", [filename for filename in filenames])
 
-        for f in as_completed(futures):
-            try:
-                f.result()
-            except Exception as e:
-                LOGGER.error(f"Chunk failed: {e}")
+    # graph.query("""
+    # MERGE (d:Document {id: $filename}) 
+    # MERGE (r:ReferenceNumber {value: $referenceNumber})
+    # MERGE (d)-[:HAS_REFERENCE_NUMBER]->(r)
+    # """,
+    # {"filename": filename, "referenceNumber": reference_number}
+    # )
 
-    # Create the vector index
-    graph.query("""
-        CREATE VECTOR INDEX `chunkVector`
-        IF NOT EXISTS
-        FOR (c: EmailChunk) ON (c.textEmbedding)
-        OPTIONS {indexConfig: {
-        `vector.dimensions`: 768,
-        `vector.similarity_function`: 'cosine'
-        }};""")
+    # # Process the chunks in parallel
+    # with ThreadPoolExecutor(max_workers=10) as executor:
+    #     futures = [
+    #         executor.submit(process_chunk, chunk, emb, doc_transformer, graph, reference_number)
+    #         for chunk, emb in zip(final_chunks, final_embeddings)
+    #     ]
+
+    #     for f in as_completed(futures):
+    #         try:
+    #             f.result()
+    #         except Exception as e:
+    #             LOGGER.error(f"Chunk failed: {e}")
+
+    # # Create the vector index
+    # graph.query("""
+    #     CREATE VECTOR INDEX `chunkVector`
+    #     IF NOT EXISTS
+    #     FOR (c: Chunk) ON (c.textEmbedding)
+    #     OPTIONS {indexConfig: {
+    #     `vector.dimensions`: 768,
+    #     `vector.similarity_function`: 'cosine'
+    #     }};""")
 
     
 if __name__ == "__main__":
