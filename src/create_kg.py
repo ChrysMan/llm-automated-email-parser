@@ -1,13 +1,21 @@
 import asyncio, os, sys
+import pytesseract
+import tempfile
+import pandas as pd
+from utils.graph_utils import write_file
 from time import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from utils.logging_config import LOGGER
-from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader, JSONLoader
+from langchain_community.document_loaders import DirectoryLoader, TextLoader, JSONLoader
 from langchain.text_splitter import CharacterTextSplitter
 from langchain_ollama import OllamaEmbeddings, ChatOllama
 from langchain_neo4j import Neo4jGraph
 from langchain_experimental.graph_transformers import LLMGraphTransformer
 from langchain_community.graphs.graph_document import Node, Relationship
+from PyPDF2 import PdfReader
+from pdf2image import convert_from_path
+from PIL import Image
+from pytesseract import Output
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -30,9 +38,54 @@ def create_token_batches(chunks, max_tokens=10000):
         batches.append(current_batch)
     return batches
 
+def extract_text_with_ocr(path)->pd.DataFrame:
+    """Convert PDF or JPGs, JPEGs, PNGs pages to images and run OCR."""
+    all_data = []
+    final_df = pd.DataFrame()
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            if path.lower().endswith((".jpg", ".jpeg", ".png")):
+                img = Image.open(path)
+                data = pytesseract.image_to_data(img, lang="eng+ell+chi_sim+rus+hun", output_type=Output.DATAFRAME)
+                #df = pd.read_csv(io.StringIO(data), sep='\t')
+                all_data.append(data)
+                #text += img
+            elif path.lower().endswith(".pdf"):
+                images = convert_from_path(path, output_folder=temp_dir)
+                for i, img in enumerate(images):
+                    data = pytesseract.image_to_data(img, lang="eng+ell", output_type=Output.DATAFRAME)
+                    #df = pd.read_csv(io.StringIO(data), sep='\t')
+                    #df['page'] = i + 1
+                    all_data.append(data)
+                    #text += f"{page_text.strip()}\n"
+        if all_data:
+            final_df = pd.concat(all_data, ignore_index=True)
+            final_df = final_df[final_df.conf != -1].dropna(subset=['text'])  # filter out invalid data, drop rows with NaN text
+        else:
+            final_df = pd.DataFrame()
+    except Exception as e:
+        print(f"OCR failed for {path}: {e}")
+    return final_df
+
+def process_all_pdfs(root_path):
+    """Recursively find all PDFs or JPGs, JPEGs, PNGs and extract text via OCR."""
+    ocr_results = {}
+    for dirpath, _, filenames in os.walk(root_path):
+        for filename in filenames:
+            if filename.lower().endswith(".pdf") or filename.lower().endswith(".jpg") or filename.lower().endswith(".jpeg") or filename.lower().endswith(".png"):
+                file_path = os.path.join(dirpath, filename)
+                print(f"Processing {file_path} ...")
+                ocr_results[file_path] = extract_text_with_ocr(file_path)
+    return ocr_results
+
 def process_chunk(chunk, embedding, doc_transformer, graph, reference_number):
     filename = os.path.splitext(os.path.basename(chunk.metadata["source"]))[0]
-    chunk_id = f"{filename}.{chunk.metadata["seq_num"]}"
+    print(chunk.metadata)
+    if "seq_num" in chunk.metadata:
+        chunk_id = f"{filename}.{chunk.metadata["seq_num"]}"
+    # 
+    else:
+        chunk_id = f"{filename}.{hash(chunk.page_content)}"
 
     # Add the Document and Chunk nodes to the graph
     properties = {
@@ -45,8 +98,6 @@ def process_chunk(chunk, embedding, doc_transformer, graph, reference_number):
 
     graph.query("""
         MERGE (d:Document {id: $filename})
-        MERGE (r:ReferenceNumber {value: $referenceNumber})
-        MERGE (d)-[:HAS_REFERENCE_NUMBER]->(r)
         MERGE (c:Chunk {id: $chunk_id})
         SET c.text = $text
         MERGE (d)<-[:PART_OF]-(c)
@@ -157,20 +208,23 @@ async def main():
     ]
 
     prompt =  """
-You are extracting a knowledge graph from email text. 
+You are extracting a knowledge graph from email text in json format or from PDFs invoices scanned into txt format. 
 Prefer using the following schema when identifying entities and relationships:
 
 Entities: Document, Person, Organization, Location, Date, EmailAddress, Destination, Airport, Port, Product, Route, Attachment, Shipper, Shipment
 Relationships: HAS_ENTITY, WORKS_AT, SENT_TO, CCED, SHIPPED_BY, RECEIVED_BY, CORRESPONDENCE
 
 Rules:
-- Document node and Chunk nodes have been already created in the graph database, no need to create them again.
 - You may define a new entity or relationship ONLY if it clearly adds new information not represented by the above list.
 - When introducing a new type, use descriptive names and keep them consistent across messages. 
 - Extract as many usefull information as possible from the email body text to populate the knowledge graph.
 - For additional information related to an entity (e.g., email address of a person, product ID, quantity, departure/arrival date of a shipment), store it as a property of the corresponding node instead of creating a separate node.
 
-I provide you with some acronyms and their meanings that are commonly used in shipping emails:
+Extra rules for extracting from scanned PDF invoices in txt format:
+- The txt where extracted from scanned PDFs may contain OCR errors. Use context to correctly identify entities and relationships despite minor text inaccuracies.
+- The text was created by grouping the OCR output by block_num, par_num, and line_num.
+
+I provide you with some acronyms and their meanings that are commonly used in shipping emails.Use them to understand the context better and extract more accurate information:
 ACY: AGENCY 
 AGN: AGENT	
 SHP: SHIPPER	
@@ -268,19 +322,32 @@ Edges:
         additional_instructions=prompt
     )
 
+    # Process all PDFs and JPGs, JPEGs, PNGs  with OCR and save the text files
+    result = process_all_pdfs(DOCS_PATH)
+    for file_path, df in result.items():
+        if isinstance(df, pd.DataFrame):
+            lines = []
+            for _, group in df.groupby(["block_num", "par_num", "line_num"]):
+                line_text = " ".join(group["text"].dropna().tolist())
+                lines.append(line_text)
+            text_blob = "\n".join(lines)
+            out_file = file_path.replace(".pdf", "_ocr.txt").replace(".jpg", "_ocr.txt").replace(".jpeg", "_ocr.txt").replace(".png", "_ocr.txt")
+            write_file(text_blob, out_file)
+
     # Load and split the documents
     json_loader = DirectoryLoader(DOCS_PATH, glob="*unique.json", loader_cls=lambda path: JSONLoader(path, jq_schema=".[]", text_content=False), show_progress=True)
-    pdf_loader = DirectoryLoader(DOCS_PATH, glob="*.pdf", loader_cls=PyPDFLoader, show_progress=True, use_multithreading=True)
+    txt_loader = DirectoryLoader(DOCS_PATH, glob="*.txt", loader_cls=TextLoader, use_multithreading=True)
 
     text_splitter = CharacterTextSplitter(
-        separator="\n\n",
-        chunk_size=1500,
-        chunk_overlap=200,
+        separator="\n",
+        chunk_size=500,
+        chunk_overlap=100,
     )
 
     json_docs = json_loader.load()
-    pdf_docs = pdf_loader.load()
-    pdf_chunks = text_splitter.split_documents(pdf_docs)
+    txt_docs = txt_loader.load()
+    txt_chunks = text_splitter.split_documents(txt_docs)
+    #print("\n\nCHUNK---------\n\n".join([repr(chunk.page_content) for chunk in txt_chunks]))
 
     # Produce json embeddings in batches
     json_batches = create_token_batches(json_docs, max_tokens=10000)
@@ -288,54 +355,55 @@ Edges:
     json_embeddings = await asyncio.gather(*json_tasks)
     json_embeddings = [emb for batch in json_embeddings for emb in batch]   # flatten
 
-    # Produce pdf embeddings in batches
-    pdf_batches = create_token_batches(pdf_chunks, max_tokens=10000)
-    pdf_tasks = [embedding_provider.aembed_documents([chunk.page_content for chunk in batch]) for batch in pdf_batches]
-    pdf_embeddings = await asyncio.gather(*pdf_tasks)
-    pdf_embeddings = [emb for batch in pdf_embeddings for emb in batch]     # flatten
+    # Produce txt embeddings in batches
+    txt_batches = create_token_batches(txt_chunks, max_tokens=10000)
+    txt_tasks = [embedding_provider.aembed_documents([chunk.page_content for chunk in batch]) for batch in txt_batches]
+    txt_embeddings = await asyncio.gather(*txt_tasks)
+    txt_embeddings = [emb for batch in txt_embeddings for emb in batch]     # flatten
 
     # Combine the chunks and embeddings
-    final_chunks = json_docs + pdf_chunks
-    final_embeddings = json_embeddings + pdf_embeddings
+    final_chunks = json_docs + txt_chunks
+    final_embeddings = json_embeddings + txt_embeddings
+    print([final_chunk for final_chunk in final_chunks[17:]])
 
     # Add Document node to the graph so it will be created once per document
-    filename = os.path.splitext(os.path.basename(pdf_chunks[0].metadata["source"]))[0]
+    filename = os.path.splitext(os.path.basename(json_docs[0].metadata["source"]))[0]
     reference_number = os.path.basename(os.path.dirname(json_docs[0].metadata["source"]))
 
-    filenames = set([os.path.splitext(os.path.basename(pdf_chunk.metadata["source"]))[0] for pdf_chunk in pdf_chunks])
-    #filenames = [filename for filename in os.listdir(DOCS_PATH) if filename.endswith(".pdf")]
-    print("Loaded pdf docs:", [filename for filename in filenames])
+    filenames = list(set([os.path.splitext(os.path.basename(txt_chunk.metadata["source"]))[0] for txt_chunk in txt_chunks]))
+    filenames.append(filename)
 
-    # graph.query("""
-    # MERGE (d:Document {id: $filename}) 
-    # MERGE (r:ReferenceNumber {value: $referenceNumber})
-    # MERGE (d)-[:HAS_REFERENCE_NUMBER]->(r)
-    # """,
-    # {"filename": filename, "referenceNumber": reference_number}
-    # )
+    for filename in filenames:
+        graph.query("""
+        MERGE (d:Document {id: $filename}) 
+        MERGE (r:ReferenceNumber {value: $referenceNumber})
+        MERGE (d)-[:HAS_REFERENCE_NUMBER]->(r)
+        """,
+        {"filename": filename, "referenceNumber": reference_number}
+        )
 
-    # # Process the chunks in parallel
-    # with ThreadPoolExecutor(max_workers=10) as executor:
-    #     futures = [
-    #         executor.submit(process_chunk, chunk, emb, doc_transformer, graph, reference_number)
-    #         for chunk, emb in zip(final_chunks, final_embeddings)
-    #     ]
+    # Process the chunks in parallel
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [
+            executor.submit(process_chunk, chunk, emb, doc_transformer, graph, reference_number)
+            for chunk, emb in zip(final_chunks, final_embeddings)
+        ]
 
-    #     for f in as_completed(futures):
-    #         try:
-    #             f.result()
-    #         except Exception as e:
-    #             LOGGER.error(f"Chunk failed: {e}")
+        for f in as_completed(futures):
+            try:
+                f.result()
+            except Exception as e:
+                LOGGER.error(f"Chunk failed: {e}")
 
-    # # Create the vector index
-    # graph.query("""
-    #     CREATE VECTOR INDEX `chunkVector`
-    #     IF NOT EXISTS
-    #     FOR (c: Chunk) ON (c.textEmbedding)
-    #     OPTIONS {indexConfig: {
-    #     `vector.dimensions`: 768,
-    #     `vector.similarity_function`: 'cosine'
-    #     }};""")
+    # Create the vector index
+    graph.query("""
+        CREATE VECTOR INDEX `chunkVector`
+        IF NOT EXISTS
+        FOR (c: Chunk) ON (c.textEmbedding)
+        OPTIONS {indexConfig: {
+        `vector.dimensions`: 768,
+        `vector.similarity_function`: 'cosine'
+        }};""")
 
     
 if __name__ == "__main__":

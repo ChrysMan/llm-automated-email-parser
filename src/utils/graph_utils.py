@@ -7,7 +7,7 @@ from typing import List, Tuple
 def write_file(content, filename):
     """ Writes the given content to the given file to the local directory """
     try:
-        with open(f"{filename}", "w") as f:
+        with open(f"{filename}", "w", encoding="utf-8") as f:
             f.write(str(content))
     except Exception as e:
         LOGGER.error(f"Failed to write at file {filename}: {e}")
@@ -15,7 +15,7 @@ def write_file(content, filename):
 def append_file(content, filename):
     """ Appends the given content to given file to the local directory """
     try:
-        with open(f"{filename}", "a") as f:
+        with open(f"{filename}", "a", encoding="utf-8") as f:
             f.write(str(content))
     except Exception as e:
         LOGGER.error(f"Failed to append at file {filename}: {e}")
