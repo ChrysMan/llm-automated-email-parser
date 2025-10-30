@@ -148,7 +148,8 @@ async def main():
     # model = "gemma3:latest"
     # model = "llama3.2:3b"
     # model = "llama3.1:8b"
-    model = "qwen2.5:14b"
+    # model = "qwen2.5:14b"
+    model = "qwen3:32b"
 
     llm = ChatOllama( 
         model=model,
@@ -232,6 +233,7 @@ CNE: CONSIGNEE
 CL: CLIENT	
 TR: TRUCKER	
 INC: INCURANCE	
+BL: BILL OF LADING
 BLF, HBLF, MBLF: BILL OF LADING FINAL
 BLD, HBLD, MBLD: BILL OF LADING DRAFT
 BLO, HBLO, MBLO: BILL OF LADING ORIGINAL
@@ -310,7 +312,7 @@ Edges:
   - (123456) RECEIVED_BY (SeaShipments Italia S.p.A.)
   - (123456) SHIPS_TO (Port of Shanghai)
   - (123456) SHIPPED_FROM (Port of Piraeus)
-   """
+"""
 
 
     doc_transformer = LLMGraphTransformer(
@@ -347,7 +349,6 @@ Edges:
     json_docs = json_loader.load()
     txt_docs = txt_loader.load()
     txt_chunks = text_splitter.split_documents(txt_docs)
-    #print("\n\nCHUNK---------\n\n".join([repr(chunk.page_content) for chunk in txt_chunks]))
 
     # Produce json embeddings in batches
     json_batches = create_token_batches(json_docs, max_tokens=10000)
@@ -364,7 +365,7 @@ Edges:
     # Combine the chunks and embeddings
     final_chunks = json_docs + txt_chunks
     final_embeddings = json_embeddings + txt_embeddings
-    print([final_chunk for final_chunk in final_chunks[17:]])
+    #print([final_chunk for final_chunk in final_chunks[17:]])
 
     # Add Document node to the graph so it will be created once per document
     filename = os.path.splitext(os.path.basename(json_docs[0].metadata["source"]))[0]
