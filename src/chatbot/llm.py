@@ -6,23 +6,25 @@ load_dotenv()
 from langchain_ollama import ChatOllama
 
 # model = "mistral-7b"
-model = "neural-chat:latest"
+# model = "neural-chat:latest"
 # model = "gemma3:latest"
 # model = "llama3.2:3b"
 # model = "llama3.1:8b"
+model="qwen2.5:14b"
 
 llm = ChatOllama( 
     model=model,
-    temperature=0
+    temperature=0.3
 )
 
 qa_llm = ChatOllama(
-    model="qwen2.5:14b",
+    model=model,
     temperature=0.2
 )
 
 cypher_llm = ChatOllama(
-    model="qwen2.5:14b",    
+    model=model,    
+    num_predict=16384,
     temperature=0
 )
 

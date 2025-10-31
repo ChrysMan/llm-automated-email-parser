@@ -66,5 +66,5 @@ chunk_retriever = create_retrieval_chain(
 def find_chunk(q):
     return chunk_retriever.invoke({"input": q})
 
-while (q := input("> ")) != "exit":
-    print(find_chunk(q))
+# while (q := input("> ")) != "exit":
+#     print(find_chunk(q))

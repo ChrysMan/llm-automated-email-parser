@@ -13,30 +13,32 @@ from utils import get_session_id
 from tools.vector import find_chunk
 from tools.cypher import run_cypher
 
-chat_prompt = ChatPromptTemplate.from_messages(
-    [
-        ("system", "You are an AI expert providing information about Neo4j and Knowledge Graphs."),
-        ("human", "{input}"),
-    ]
-)
+# chat_prompt = ChatPromptTemplate.from_messages(
+#     [
+#         ("system", "You are an AI expert providing information about Neo4j and Knowledge Graphs."),
+#         ("human", "{input}"),
+#     ]
+# )
 
-kg_chat = chat_prompt | llm | StrOutputParser()
+# kg_chat = chat_prompt | llm | StrOutputParser()
 
 # tag::tools[]
 tools = [
+    # Tool.from_function(
+    #     name="General Assistant",
+    #     description="""Use this for conversations that do NOT require accessing the email content 
+    #         or the knowledge graph. This includes general questions, clarifications, 
+    #         or reasoning without retrieving data.""",
+    #     func=kg_chat.invoke,
+    # ), 
     Tool.from_function(
-        name="General Chat",
-        description="For general knowledge graph chat not covered by other tools",
-        func=kg_chat.invoke,
-    ), 
-    Tool.from_function(
-        name="Email content search",
-        description="For when you need to find information in the Email content",
+        name="Email Content Search",
+        description="Use this when the answer requires reading the content of emails, such as sender, date, or message text.",
         func=find_chunk, 
     ),
     Tool.from_function(
         name="Knowledge Graph information",
-        description="For when you need to find information about the entities and relationship in the knowledge graph",
+        description="Use this when the answer requires structured entity/relationship info from the knowledge graph.",
         func = run_cypher,
     )
 ]
@@ -47,11 +49,11 @@ def get_memory(session_id):
 
 # tag::agent_prompt[]
 agent_prompt = PromptTemplate.from_template("""
-You are a Neo4j, Knowledge graph, and generative AI expert.
+You are an AI Assistant specialized in answering questions about the company's email data using the Knowledge Graph and available tools.
 Be as helpful as possible and return as much information as possible.
-Only answer questions that relate to Neo4j, graphs, cypher, generative AI, or associated subjects.
         
 Always use a tool and only use the information provided in the context.
+If multiple tools are relevant, you can use them sequentially. Always choose the most appropriate tool for each part of the question.
 
 TOOLS:
 ------

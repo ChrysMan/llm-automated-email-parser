@@ -13,13 +13,14 @@ CYPHER_GENERATION_TEMPLATE = """Task:Generate Cypher statement to query a graph 
 Instructions:
 Use only the provided relationship types and properties in the schema.
 Do not use any other relationship types or properties that are not provided.
+Do not repeat properties in the RETURN clause. Each property must appear only once.
 Only include the generated Cypher statement in your response.
 Do NOT add any explanation or comments outside the Cypher query.
 
 Always use case insensitive search when matching strings. 
 
 Examples: 
-# Use case insensitive matching for entity ids
+# Use case insensitive matching 
 MATCH (c:Chunk)-[:HAS_ENTITY]->(e)
 WHERE e.id =~ '(?i).*entityName.*'
 RETURN e.id
@@ -32,10 +33,10 @@ RETURN d.id, c.id, c.text, e.id
 Schema:
 {schema}
 
-Where the relationship "Emails" refers to email addresses and relationship "Chunk" refers to the actual email content.
 
 The question is:
 {question}"""
+
 
 nodes = graph.query("""
     CALL db.schema.nodeTypeProperties() 
@@ -66,25 +67,49 @@ cypher_generation_prompt = PromptTemplate(
     partial_variables={"schema": graph_schema} 
 )
 
+CYPHER_QA_TEMPLATE = """You are an assistant that helps to form nice and human understandable answers.
+The information part contains the provided information that you must use to construct an answer.
+The provided information is authoritative, you must never doubt it or try to use your internal knowledge to correct it.
+Make the answer sound as a response to the question. Do not mention that you based the result on the given information.
+Here is an example:
+
+Question: Who does John Doe work for?
+Context:['o.id':CTL LLC, 'o.name': None]
+Helpful Answer: John Doe works for CTL LLC
+
+Follow this example when generating answers.
+Usually the id property holds the information needed.
+If the provided information is empty, say that you don't know the answer. 
+Information:
+{context}
+
+Question: {question}
+Helpful Answer:"""
+
+cypher_qa_prompt = PromptTemplate(
+    input_variables=["context", "question"], template=CYPHER_QA_TEMPLATE
+)
+
 cypher_chain = GraphCypherQAChain.from_llm(
     qa_llm=qa_llm,
     cypher_llm=cypher_llm,
     graph=graph,
     cypher_prompt=cypher_generation_prompt,
+    qa_prompt=cypher_qa_prompt,
     validate_cypher = True,
     verbose=True,
     allow_dangerous_requests=True
 )
 
-# def run_cypher(q):
-#     cypher_chain.invoke({"query": q})
-
 def run_cypher(q):
-    result =  cypher_chain.invoke({"query": q})
-    return result
+    return cypher_chain.invoke({"query": q})
 
-while (q := input("> ")) != "exit":
-    tic1 = time()
-    print(run_cypher(q))
-    print(f"Time taken to process: {time() - tic1} seconds")
+# def run_cypher(q):
+#     result =  cypher_chain.invoke({"query": q})
+#     return result
+
+# while (q := input("> ")) != "exit":
+#     tic1 = time()
+#     print(run_cypher(q))
+#     print(f"Time taken to process: {time() - tic1} seconds")
   
