@@ -17,6 +17,11 @@ llm = ChatOllama(
     temperature=0.3
 )
 
+dedup_llm = ChatOllama(
+    model="qwen2.5:32b",
+    temperature=0
+)
+
 qa_llm = ChatOllama(
     model=model,
     temperature=0.2

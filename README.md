@@ -94,7 +94,7 @@ python rag_embedDB.py
 # Create Neo4j knowledge graph from emails
 python create_kg.py /path/to/your/data/directory
 # Run the bot with an agent implementing RAG on the knowledge graph
-python bot.py  
+streamlit run bot.py  
 ```
 #### Note: 
 /path/to/your/data/directory should be replaced with the actual path where your `.msg` files are stored.

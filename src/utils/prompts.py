@@ -233,6 +233,69 @@ Translate the following email:
 # 3. If no greeting block exists → output must start with "From:" and end strictly with:
 # last valid body line + newline + "---End of email---"
 
+cleaning_prompt = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
+You are an email cleaning agent. You have two tasks:
+1. Remove irrelevant text from the end of the email body      
+2. Your task is to clean the email headers  
+2. Remove only apostrophes (" or ') from the contacts in the headers.     
+
+Rules for task 1:
+(1) A signature block begins with a closing greeting "Best regards", "Thanks and Best regards", "Kind regards", "Sincerely", "Yours faithfully", "Tks & Best Regards", "Ευχαριστώ", "Ευχαριστώ πολύ", "Με εκτίμηση" or similar) and ends with the sender's name on the next line.  
+(2) Delete everything after the sender's name: phone numbers, job titles, company names, disclaimers, antivirus notices, footers, or device signatures.  
+(3) If no closing greeting + name is found, remove only irrelevant trailing text (like disclaimers, antivirus notices, footers, device signatures).  
+(4) Do not invent, rewrite, or add content. Keep all spacing, line breaks, punctuation, and formatting exactly as in the input.  
+
+Rules for task 2:                             
+(1) Process the fields "From:", "To:", "Cc:"  sequentially, using the following rules in order:
+    - Remove the duplicate emails and names from the contacts.                                                     
+    - Remove apostrophes (" or ') from the contacts.                                            
+(2) Copy "Subject:" and "Sent:" headers exactly as in the input.
+                                               
+Output format:  
+- Preserve the body until the cut point.  
+- End the output with:  
+   - If a signature block exists → sender's name + newline + "End of email"  
+   - Otherwise -> newline + "End of email" 
+                                               
+Example:
+Input: 
+From: johndoe@email.gr
+Sent: Friday, December 29, 2023 22:00 PM
+To: Mary Joe; harapap@gmail.com <harapap@gmail.com>; Kate Doe <katedoe@example.com> 
+Cc: Sales Department
+Subject: Upcoming Shipment
+Hello Mary,
+This is to inform you about the upcoming shipment.
+Thanks and Best regards,
+John Doe
+Export Manager
+Company XYZ Ltd.
+190, Venizelos Str 12345 Salamina – Greece
+This email has been scanned by XYZ AntiVirus.
+***TO AVOID HACKER,PLS RECONFIRM BANK ACCOUNT WITH ME VIA WECHAT OR SKYPE BEFORE ARRANGE PAYMENT***,
+Sent from my iphone
+                                                         
+Output: 
+From: johndoe@email.gr
+Sent: Friday, December 29, 2023 22:00 PM
+To: Mary Joe; harapap@gmail.com <harapap@gmail.com>; Kate Doe <katedoe@example.com> 
+Cc: Sales Department
+Subject: Upcoming Shipment
+Hello Mary,
+This is to inform you about the upcoming shipment.
+Thanks and Best regards,
+John Doe
+End of email                                              
+                                                         
+Process the following email:
+<|eot_id|>
+<|start_header_id|>user<|end_header_id|>
+{email}
+<|eot_id|>
+<|start_header_id|>assistant<|end_header_id>                                                      
+"""
+)                 
+
 signature_cleaning_prompt = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
 You are an email cleaning agent. Your job is to remove irrelevant text from the end of the email body while keeping the original headers and message intact.  
 

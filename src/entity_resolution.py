@@ -1,11 +1,10 @@
 import os
 from typing import List, Optional
 from langchain_neo4j import Neo4jVector
-from langchain.graphs import Neo4jGraph
 from pydantic import BaseModel, Field
 from tqdm import tqdm
 from graphdatascience import GraphDataScience
-from chatbot.llm import llm, qa_llm, cypher_llm, embedding_provider
+from chatbot.llm import dedup_llm, embedding_provider
 from chatbot.graph import graph
 from langchain_core.prompts import ChatPromptTemplate
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -15,6 +14,7 @@ gds = GraphDataScience(
     auth=(os.getenv("NEO4J_USERNAME"), os.getenv("NEO4J_PASSWORD"))
 )
 
+
 # Calculating text embeddings for entities in the knowledge graph
 vector = Neo4jVector.from_existing_graph(
     embedding_provider,
@@ -22,6 +22,8 @@ vector = Neo4jVector.from_existing_graph(
     text_node_properties=['id'],
     embedding_node_property='textEmbedding'
 )
+
+gds.graph.drop("entities", failIfMissing=True)
 
 # Project an in-memory graph to use in gds algorithms
 G, result = gds.graph.project(
@@ -36,6 +38,7 @@ similarity_threshold = 0.95
 
 gds.knn.mutate(
     G,
+    nodeLabels=['__Entity__'],
     nodeProperties=['textEmbedding'],
     mutateRelationshipType='SIMILAR',
     mutateProperty='score',
@@ -93,7 +96,16 @@ Here are the rules for identifying duplicates:
 1. Entities with minor typographical differences should be considered duplicates.
 2. Entities with different formats but the same content should be considered duplicates.
 3. Entities that refer to the same real-world object or concept, even if described differently, should be considered duplicates.
-4. If it refers to different numbers, dates, or products, do not merge results
+4. If it refers to different numbers, dates, or products, do not merge results. 
+
+Examples of what not to merge:
+- ['12345_unique.4', '12345_unique.26', '12345_unique.40'] 
+- ['Monday, January 22, 2024 08:22 AM', 'Monday, January 22, 2024 10:22 Am']
+- ['12345-ACY-DN_ocr', '12345-ACY-DO_ocr']
+
+Examples of what to merge:
+- ['Monday, January 22, 2024 08:22 AM', 'Monday, January 22, 2024 20:22 Am', 'Mon, Jan 22, 2024 08:22', 22/01/2024 08:22']
+- ['123456 CNEE DO_ocr', '123456-CNEE-DO_ocr']
 """
 user_template = """
 Here is the list of entities to process:
@@ -114,16 +126,16 @@ class Disambiguate(BaseModel):
     )
 
 
-llm.with_structured_output(Disambiguate)
+extraction_llm = dedup_llm.with_structured_output(Disambiguate)
 
 extraction_prompt = ChatPromptTemplate.from_messages(
     [
         ("system", system_prompt),
         ("human", user_template),
     ]
-).with_partial_variables({"entities": "{entities}"})
+)
 
-extraction_chain = extraction_prompt | llm
+extraction_chain = extraction_prompt | extraction_llm
 
 def entity_resolution(entities: List[str]) -> Optional[List[List[str]]]:
     return [
@@ -146,17 +158,23 @@ with ThreadPoolExecutor(max_workers=10) as executor:
         if to_merge:
             merged_entities.extend(to_merge)
 
-graph.query("""
-UNWIND $data AS candidates
-CALL {
-  WITH candidates
-  MATCH (e:__Entity__) WHERE e.id IN candidates
-  RETURN collect(e) AS nodes
-}
-CALL apoc.refactor.mergeNodes(nodes, {properties: {
-    description:'combine',
-    `.*`: 'discard'
-}})
-YIELD node
-RETURN count(*)
-""", params={"data": merged_entities})
+print(potential_duplicate_candidates)
+print(merged_entities)
+
+# graph.query("""
+# UNWIND $data AS candidates
+# CALL {
+#   WITH candidates
+#   MATCH (e:__Entity__) WHERE e.id IN candidates
+#   RETURN collect(e) AS nodes
+# }
+# CALL apoc.refactor.mergeNodes(nodes, {properties: {
+#     id:'discard',
+#     textEmbedding:'discard',
+#     `.*`: 'combine'
+# }, mergeRels: true})
+# YIELD node
+# RETURN count(*)
+# """, params={"data": merged_entities})
+
+

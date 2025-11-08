@@ -23,16 +23,16 @@ from utils.graph_utils import clean_data
 
 parser = JsonOutputParser(pydantic_object=EmailInfo, json_compatible=True)
 
-#@traceable
+@traceable
 def clean_email_llm(email_text:str, prompt, model:AutoModelForCausalLM, tokenizer: AutoTokenizer, trace_name:str, device:torch.device) -> str:
     """Cleans the email text by removing unnecessary information and formatting."""
     try:
-        # with trace(
-        #         name=f"{trace_name}",
-        #         metadata={
-        #             "model_name": model.name_or_path
-        #         }
-        #     ):
+        with trace(
+                name=f"{trace_name}",
+                metadata={
+                    "model_name": model.name_or_path
+                }
+            ):
             # Prepare the prompt
             prompt_text = prompt.format(email=email_text)
 
@@ -59,7 +59,7 @@ def clean_email_llm(email_text:str, prompt, model:AutoModelForCausalLM, tokenize
 
             # Decode the generated text
             cleaned_email_text = tokenizer.decode(cleaned_email[0], skip_special_tokens=False)
-            #print("\n\nRaw response:\n", cleaned_email_text)
+        
             # Extract the relevant part of the response
             real_response = cleaned_email_text.split("<|start_header_id|>assistant<|end_header_id>|")[-1].split("<|start_header_id|>assistant<|end_header_id>")[-1].split("End of email")[0].strip()
             cleaned_response = clean_data(real_response)

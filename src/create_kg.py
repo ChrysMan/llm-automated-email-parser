@@ -149,7 +149,7 @@ async def main():
     # model = "llama3.2:3b"
     # model = "llama3.1:8b"
     # model = "qwen2.5:14b"
-    model = "qwen3:32b"
+    model = "qwen3:14b"
 
     llm = ChatOllama( 
         model=model,
@@ -220,6 +220,7 @@ Rules:
 - When introducing a new type, use descriptive names and keep them consistent across messages. 
 - Extract as many usefull information as possible from the email body text to populate the knowledge graph.
 - For additional information related to an entity (e.g., email address of a person, product ID, quantity, departure/arrival date of a shipment), store it as a property of the corresponding node instead of creating a separate node.
+- Every node needs to have a unique identifier property 'id'.
 
 Extra rules for extracting from scanned PDF invoices in txt format:
 - The txt where extracted from scanned PDFs may contain OCR errors. Use context to correctly identify entities and relationships despite minor text inaccuracies.
@@ -274,15 +275,16 @@ Example Input:
 Example Output (simplified pseudo-graph):
 Nodes:
 Person: John Doe
-  properties: email = "john.doe@globalfreight.com", organization = "Global Freight Ltd."
+  properties: id = "John Doe", email = "john.doe@globalfreight.com", organization = "Global Freight Ltd."
 Person: Maria Rossi
-  properties: email = "m.rossi@seashipments.it", organization = "SeaShipments Italia S.p.A."
+  properties: id = "Maria Rossi", email = "m.rossi@seashipments.it", organization = "SeaShipments Italia S.p.A."
 Organization: Global Freight Ltd.
-  properties: location = "Port of Piraeus, Greece"
+  properties: id = "Global Freight Ltd", location = "Port of Piraeus, Greece"
 Organization: SeaShipments Italia S.p.A.
-  properties: location = "Port of Shanghai"
+  properties: id = "SeaShipments Italia S.p.A.", location = "Port of Shanghai"
 Shipment: 123456
   properties: 
+    id = "123456"
     products = ["OceanAir pressure valves"]
     quantity = [250]
     product_ids = ["OA-532"]
@@ -291,15 +293,20 @@ Shipment: 123456
     shipper_organizations = ["Global Freight Ltd.", "SeaShipments Italia S.p.A."]
     from_port = "Port of Piraeus"
     to_port = "Port of Shanghai"
-Shipper: Global Freight Ltd.
-Shipper: SeaShipments Italia S.p.A.
 Date: Tuesday, May 30, 2023 10:36 AM
+    properties: id = "Tuesday, May 30, 2023 10:36 AM"
 Organization: Global Freight Ltd.
+    properties: id = "Global Freight Ltd."
 Organization: SeaShipments Italia S.p.A.
+    properties: id = "SeaShipments Italia S.p.A."
 EmailAddress: john.doe@globalfreight.com
+    properties: id = "john.doe@globalfreight.com"
 EmailAddress: m.rossi@seashipments.it
+    properties: id = "m.rossi@seashipments.it"
 Attachment: MBL
+    properties: id = "MBL"
 Attachment: HBL
+    properties: id = "HBL"
 
 Edges:
   - (John Doe) SENT_TO (Maria Rossi)
@@ -377,7 +384,7 @@ Edges:
     for filename in filenames:
         graph.query("""
         MERGE (d:Document {id: $filename}) 
-        MERGE (r:ReferenceNumber {value: $referenceNumber})
+        MERGE (r:ReferenceNumber {id: $referenceNumber})
         MERGE (d)-[:HAS_REFERENCE_NUMBER]->(r)
         """,
         {"filename": filename, "referenceNumber": reference_number}
@@ -405,6 +412,13 @@ Edges:
         `vector.dimensions`: 768,
         `vector.similarity_function`: 'cosine'
         }};""")
+    
+    # Add __Entity__ label to all nodes
+    graph.query("""
+    MATCH (n)
+    SET n:__Entity__
+    """
+    )
 
     
 if __name__ == "__main__":

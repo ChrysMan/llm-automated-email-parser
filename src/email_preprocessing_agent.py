@@ -7,7 +7,7 @@ from email import message_from_string
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from utils.graph_utils import extract_msg_file, clean_data, split_email_thread
 from agents.preprocessing_agent import clean_email_llm
-from utils.prompts import formatting_headers_prompt, translator_prompt_template, headers_cleaning_prompt, signature_cleaning_prompt,extraction_prompt
+from utils.prompts import cleaning_prompt, formatting_headers_prompt, translator_prompt_template, headers_cleaning_prompt, signature_cleaning_prompt,extraction_prompt
 
 if __name__ == "__main__":
 
@@ -41,7 +41,7 @@ if __name__ == "__main__":
     
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
-        torch_dtype=torch.float16,
+        dtype=torch.float16,
         attn_implementation="sdpa",
         device_map="auto",
         max_memory={
@@ -62,7 +62,7 @@ if __name__ == "__main__":
             tic2 = time()
 
             try:
-                 with open("/home/chryssida/src/Texts/AI-231630-split.txt", "a") as f:
+                 with open("/home/chryssida/src/Texts/SI-234107-split.txt", "a") as f:
                     raw_msg_content = extract_msg_file(file_path)
                     cleaned_msg_content = clean_data(raw_msg_content)
                     splitted_emails = split_email_thread(cleaned_msg_content)
@@ -78,12 +78,11 @@ if __name__ == "__main__":
                 for email in splitted_emails:
                     count += 1
                     
-                    formatted_email = clean_email_llm(email, prompt=formatting_headers_prompt, model=model, tokenizer=tokenizer, trace_name="format_email_headers", device=device0)
+                    formatted_email = clean_email_llm(email, prompt=formatting_headers_prompt, model=model, tokenizer=tokenizer, trace_name=f"format_email_headers_{filename}_{count}", device=device0)
                     translated_email = clean_email_llm(formatted_email, prompt=translator_prompt_template, model=model, tokenizer=tokenizer, trace_name=f"translate_{filename}_{count}", device=device0)
-                    cleaned_from_signatures = clean_email_llm(translated_email, prompt=signature_cleaning_prompt, model=model, tokenizer=tokenizer, trace_name=f"clean_sigantures_{filename}_{count}", device=device0)
-                    cleaned_from_headers = clean_email_llm(cleaned_from_signatures, prompt=headers_cleaning_prompt, model=model, tokenizer=tokenizer, trace_name=f"clean_headers_{filename}_{count}", device=device0)
+                    cleaned_from_signatures_headers = clean_email_llm(translated_email, prompt=cleaning_prompt, model=model, tokenizer=tokenizer, trace_name=f"clean_email_{filename}_{count}", device=device0)
                     
-                    msg = message_from_string(cleaned_from_headers)
+                    msg = message_from_string(cleaned_from_signatures_headers)
                     email_dict = {
                     "from": msg["From"],
                     "sent": msg["Sent"],
