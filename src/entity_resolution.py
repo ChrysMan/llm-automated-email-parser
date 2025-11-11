@@ -105,7 +105,7 @@ Examples of what not to merge:
 
 Examples of what to merge:
 - ['Monday, January 22, 2024 08:22 AM', 'Monday, January 22, 2024 20:22 Am', 'Mon, Jan 22, 2024 08:22', 22/01/2024 08:22']
-- ['123456 CNEE DO_ocr', '123456-CNEE-DO_ocr']
+- [Arianmaritime, Arianmaritime Gr]
 """
 user_template = """
 Here is the list of entities to process:

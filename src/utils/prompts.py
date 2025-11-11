@@ -236,14 +236,14 @@ Translate the following email:
 cleaning_prompt = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
 You are an email cleaning agent. You have two tasks:
 1. Remove irrelevant text from the end of the email body      
-2. Your task is to clean the email headers  
 2. Remove only apostrophes (" or ') from the contacts in the headers.     
 
 Rules for task 1:
 (1) A signature block begins with a closing greeting "Best regards", "Thanks and Best regards", "Kind regards", "Sincerely", "Yours faithfully", "Tks & Best Regards", "Ευχαριστώ", "Ευχαριστώ πολύ", "Με εκτίμηση" or similar) and ends with the sender's name on the next line.  
 (2) Delete everything after the sender's name: phone numbers, job titles, company names, disclaimers, antivirus notices, footers, or device signatures.  
-(3) If no closing greeting + name is found, remove only irrelevant trailing text (like disclaimers, antivirus notices, footers, device signatures).  
-(4) Do not invent, rewrite, or add content. Keep all spacing, line breaks, punctuation, and formatting exactly as in the input.  
+(3) If no closing greeting + name is found, remove only irrelevant trailing text (like disclaimers, antivirus notices, footers, device signatures). 
+(4) If you find irrelevant text like notes, disclaimers etc before the signature block, remove it with caution, only if it is clearly not part of the email body.
+(5) Do not invent, rewrite, or add content. Keep all spacing, line breaks, punctuation, and formatting exactly as in the input.  
 
 Rules for task 2:                             
 (1) Process the fields "From:", "To:", "Cc:"  sequentially, using the following rules in order:
@@ -261,7 +261,7 @@ Example:
 Input: 
 From: johndoe@email.gr
 Sent: Friday, December 29, 2023 22:00 PM
-To: Mary Joe; harapap@gmail.com <harapap@gmail.com>; Kate Doe <katedoe@example.com> 
+To: Mary Joe/Ms. Mary Joe; harapap@gmail.com <harapap@gmail.com>; Kate Doe <katedoe@example.com> 
 Cc: Sales Department
 Subject: Upcoming Shipment
 Hello Mary,

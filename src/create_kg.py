@@ -83,7 +83,6 @@ def process_chunk(chunk, embedding, doc_transformer, graph, reference_number):
     print(chunk.metadata)
     if "seq_num" in chunk.metadata:
         chunk_id = f"{filename}.{chunk.metadata["seq_num"]}"
-    # 
     else:
         chunk_id = f"{filename}.{hash(chunk.page_content)}"
 
@@ -149,7 +148,7 @@ async def main():
     # model = "llama3.2:3b"
     # model = "llama3.1:8b"
     # model = "qwen2.5:14b"
-    model = "qwen3:14b"
+    model = "qwen2.5:14b"
 
     llm = ChatOllama( 
         model=model,
@@ -212,14 +211,14 @@ async def main():
 You are extracting a knowledge graph from email text in json format or from PDFs invoices scanned into txt format. 
 Prefer using the following schema when identifying entities and relationships:
 
-Entities: Document, Person, Organization, Location, Date, EmailAddress, Destination, Airport, Port, Product, Route, Attachment, Shipper, Shipment
-Relationships: HAS_ENTITY, WORKS_AT, SENT_TO, CCED, SHIPPED_BY, RECEIVED_BY, CORRESPONDENCE
+Entities: Person, Organization, Location, Date, Destination, Airport, Port, Product, Route, Attachment, Shipper, Shipment
+Relationships: WORKS_AT, SENT_TO, CCED, SHIPPED_BY, RECEIVED_BY, CORRESPONDENCE, HAS_ENTITY
 
 Rules:
-- You may define a new entity or relationship ONLY if it clearly adds new information not represented by the above list.
+- You may define a new entity or relationship type ONLY if it clearly adds new information not represented by the above list.
 - When introducing a new type, use descriptive names and keep them consistent across messages. 
 - Extract as many usefull information as possible from the email body text to populate the knowledge graph.
-- For additional information related to an entity (e.g., email address of a person, product ID, quantity, departure/arrival date of a shipment), store it as a property of the corresponding node instead of creating a separate node.
+- For additional information related to an entity (e.g. email address of a person, product ID, quantity, departure/arrival date of a shipment), store it as a property of the corresponding node instead of creating a separate node.
 - Every node needs to have a unique identifier property 'id'.
 
 Extra rules for extracting from scanned PDF invoices in txt format:
@@ -299,10 +298,6 @@ Organization: Global Freight Ltd.
     properties: id = "Global Freight Ltd."
 Organization: SeaShipments Italia S.p.A.
     properties: id = "SeaShipments Italia S.p.A."
-EmailAddress: john.doe@globalfreight.com
-    properties: id = "john.doe@globalfreight.com"
-EmailAddress: m.rossi@seashipments.it
-    properties: id = "m.rossi@seashipments.it"
 Attachment: MBL
     properties: id = "MBL"
 Attachment: HBL
