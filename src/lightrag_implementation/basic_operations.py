@@ -61,30 +61,26 @@ async def bge_rerank_func(query: str, documents: list[str], top_n: int = None) -
             for document in documents
         ]
 
-rerank_model_func = partial(
-    jina_rerank,
-    model="BAAI/bge-reranker-v2-m3",
-    api_key="DUMMY",
-    base_url= "http://0.0.0.0:8182/v1/rerank"
-)
 async def initialize_rag(working_dir: str = "./lightrag_implementation/rag_storage") -> LightRAG:
 
     rag = LightRAG(
         working_dir=working_dir,
         graph_storage="Neo4JStorage",
+        llm_model_func=ollama_model_complete,
         llm_model_name="llama3.1:8b",#"qwen2.5:14b",
         llm_model_max_async=4,
-        #min_rerank_score=0.5,
-        #vector_storage="FaissVectorDBStorage",
-        llm_model_func=ollama_model_complete,
+        llm_model_kwargs={"host": "http://localhost:11434", "options": {"num_ctx": 32768}},
+        vector_storage="FaissVectorDBStorage",
         #rerank_model_func=rerank_model_func,
+        #min_rerank_score=0.5,
         embedding_func=EmbeddingFunc(
             embedding_dim=768,
             max_token_size=8192,
             func=lambda texts: ollama_embed(
                 texts, embed_model="nomic-embed-text", host="http://localhost:11434"
                 )
-        )
+        ),
+        enable_llm_cache=False
     )
 
     # Initialize database connections
@@ -117,6 +113,8 @@ async def index_data(rag: LightRAG, dir_path: str):
     #     await rag.ainsert(texts)
     # else:
     #     LOGGER.warning(f"Unsupported file format for {file_path}")
+
+
 
 
         
