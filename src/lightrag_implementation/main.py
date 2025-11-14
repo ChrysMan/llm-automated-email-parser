@@ -43,4 +43,4 @@ if __name__ == "__main__":
         LOGGER.error(f"{dir_path} is not a valid dir.")
         sys.exit(1)
 
-    asyncio.run(main(data_path=dir_path, mode="local"))
+    asyncio.run(main(data_path=dir_path, mode="mix"))

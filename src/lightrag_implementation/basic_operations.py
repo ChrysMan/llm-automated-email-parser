@@ -4,11 +4,14 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from utils.logging_config import LOGGER
 from utils.graph_utils import read_json_file
 from lightrag.lightrag import LightRAG
+from functools import partial
+from lightrag.rerank import cohere_rerank, generic_rerank_api, jina_rerank
 from lightrag.llm.ollama import ollama_model_complete, ollama_embed
 from lightrag.utils import EmbeddingFunc
 from lightrag.kg.shared_storage import initialize_share_data, initialize_pipeline_status
 from langchain_community.document_loaders import DirectoryLoader, TextLoader, JSONLoader
 from langchain.text_splitter import CharacterTextSplitter
+from typing import Any, Dict
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -23,29 +26,58 @@ reranker_model = AutoModelForSequenceClassification.from_pretrained(reranker_nam
 reranker_model.eval()
 reranker_model.to("cuda" if torch.cuda.is_available() else "cpu")
 
-def bge_rerank_func(query: str, docs: list[str]) -> list[float]:
+async def bge_rerank_func(query: str, documents: list[str], top_n: int = None) -> list[Dict[str,Any]]:
     """Return reranking scores for each doc given a query."""
-    pairs = [[query, doc] for doc in docs]
-    device = reranker_model.device
-    with torch.no_grad():
-        inputs = reranker_tokenizer(
-            pairs, padding=True, truncation=True, return_tensors="pt", max_length=512
-        ).to(device)
-        scores = reranker_model(**inputs, return_dict=True).logits.view(-1).float()
-    return scores.cpu().tolist()
+    try:
+        pairs = [[query, doc] for doc in documents]
+        device = reranker_model.device
 
+        # Run blocking model inference in a thread 
+        def run_inference():
+            with torch.no_grad():
+                inputs = reranker_tokenizer(
+                    pairs, padding=True, truncation=True,
+                    return_tensors="pt", max_length=512
+                ).to(device)
+                scores = reranker_model(**inputs, return_dict=True).logits.view(-1).float()
+                return scores.cpu().tolist()
+        
+        # Run CPU-bound inference asynchronously
+        loop = asyncio.get_running_loop()
+        scores = await loop.run_in_executor(None, run_inference)
 
+        scored_docs = list(zip(documents, scores))
+        scored_docs.sort(key=lambda x: x[1], reverse=True)
+
+        if top_n is not None:
+            scored_docs = scored_docs[:top_n]
+        
+        #print([{"content": document, "relevance_score": score} for document, score in scored_docs])
+        return [{"index": document, "relevance_score": score} for document, score in scored_docs]
+    except Exception as e:
+        LOGGER.error(f"ERROR during reranking: {e}")
+        return [
+            {"document": document, "relevance_score": 0.0}
+            for document in documents
+        ]
+
+rerank_model_func = partial(
+    jina_rerank,
+    model="BAAI/bge-reranker-v2-m3",
+    api_key="DUMMY",
+    base_url= "http://0.0.0.0:8182/v1/rerank"
+)
 async def initialize_rag(working_dir: str = "./lightrag_implementation/rag_storage") -> LightRAG:
 
     rag = LightRAG(
         working_dir=working_dir,
         graph_storage="Neo4JStorage",
-        llm_model_name="llama3.1:8b",
+        llm_model_name="llama3.1:8b",#"qwen2.5:14b",
         llm_model_max_async=4,
-        rerank_model_func=bge_rerank_func,
-        min_rerank_score=0.5,
-        vector_storage="FaissVectorDBStorage",
+        #min_rerank_score=0.5,
+        #vector_storage="FaissVectorDBStorage",
         llm_model_func=ollama_model_complete,
+        #rerank_model_func=rerank_model_func,
         embedding_func=EmbeddingFunc(
             embedding_dim=768,
             max_token_size=8192,
