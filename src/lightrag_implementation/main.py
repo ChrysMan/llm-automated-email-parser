@@ -3,6 +3,10 @@ from time import time
 from utils.logging_config import LOGGER
 from lightrag_implementation.basic_operations import initialize_rag, index_data
 from lightrag_implementation.retrieve import run_async_query
+from dotenv import load_dotenv
+
+load_dotenv()
+print("BINDING_API_KEY:", os.getenv("RERANK_BINDING_API_KEY"))
 
 """
 1. Initialize RAG system
@@ -22,7 +26,7 @@ async def main(mode: str, data_path: str)-> None:
         LOGGER.info(f"Total time taken: {time() - tic} seconds")
 
         while (q :=input("> ")) != "exit":
-            resp_async = await run_async_query(rag, q, mode, top_k=5)
+            resp_async = await run_async_query(rag, q, mode, top_k=19)
             print("\n====== Query Result ======\n", resp_async)
 
     except Exception as e:

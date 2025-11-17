@@ -62,7 +62,7 @@ if __name__ == "__main__":
             tic2 = time()
 
             try:
-                 with open("/home/chryssida/src/Texts/SI-234107-split.txt", "a") as f:
+                 with open("/home/chryssida/src/Texts/AE-230009-split.txt", "a") as f:
                     raw_msg_content = extract_msg_file(file_path)
                     cleaned_msg_content = clean_data(raw_msg_content)
                     splitted_emails = split_email_thread(cleaned_msg_content)

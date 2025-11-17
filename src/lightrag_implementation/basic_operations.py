@@ -12,56 +12,19 @@ from lightrag.kg.shared_storage import initialize_share_data, initialize_pipelin
 from langchain_community.document_loaders import DirectoryLoader, TextLoader, JSONLoader
 from langchain.text_splitter import CharacterTextSplitter
 from typing import Any, Dict
-from dotenv import load_dotenv
-
-load_dotenv()
 
 WORKING_DIR = "./lightrag_implementation/rag_storage"
 if not os.path.exists(WORKING_DIR):
     os.makedirs(WORKING_DIR)
 
-reranker_name = "BAAI/bge-reranker-v2-m3"
-reranker_tokenizer = AutoTokenizer.from_pretrained(reranker_name)
-reranker_model = AutoModelForSequenceClassification.from_pretrained(reranker_name)
-reranker_model.eval()
-reranker_model.to("cuda" if torch.cuda.is_available() else "cpu")
+rerunk_func = partial(
+    generic_rerank_api, 
+    model=os.getenv("RERANK_MODEL"),
+    base_url=os.getenv("RERANK_BINDING_HOST"),
+    api_key=os.getenv("RERANK_BINDING_API_KEY")
+)
 
-async def bge_rerank_func(query: str, documents: list[str], top_n: int = None) -> list[Dict[str,Any]]:
-    """Return reranking scores for each doc given a query."""
-    try:
-        pairs = [[query, doc] for doc in documents]
-        device = reranker_model.device
-
-        # Run blocking model inference in a thread 
-        def run_inference():
-            with torch.no_grad():
-                inputs = reranker_tokenizer(
-                    pairs, padding=True, truncation=True,
-                    return_tensors="pt", max_length=512
-                ).to(device)
-                scores = reranker_model(**inputs, return_dict=True).logits.view(-1).float()
-                return scores.cpu().tolist()
-        
-        # Run CPU-bound inference asynchronously
-        loop = asyncio.get_running_loop()
-        scores = await loop.run_in_executor(None, run_inference)
-
-        scored_docs = list(zip(documents, scores))
-        scored_docs.sort(key=lambda x: x[1], reverse=True)
-
-        if top_n is not None:
-            scored_docs = scored_docs[:top_n]
-        
-        #print([{"content": document, "relevance_score": score} for document, score in scored_docs])
-        return [{"index": document, "relevance_score": score} for document, score in scored_docs]
-    except Exception as e:
-        LOGGER.error(f"ERROR during reranking: {e}")
-        return [
-            {"document": document, "relevance_score": 0.0}
-            for document in documents
-        ]
-
-async def initialize_rag(working_dir: str = "./lightrag_implementation/rag_storage") -> LightRAG:
+async def initialize_rag(working_dir: str = WORKING_DIR) -> LightRAG:
 
     rag = LightRAG(
         working_dir=working_dir,
@@ -71,8 +34,8 @@ async def initialize_rag(working_dir: str = "./lightrag_implementation/rag_stora
         llm_model_max_async=4,
         llm_model_kwargs={"host": "http://localhost:11434", "options": {"num_ctx": 32768}},
         vector_storage="FaissVectorDBStorage",
-        #rerank_model_func=rerank_model_func,
-        #min_rerank_score=0.5,
+        rerank_model_func=rerunk_func,
+        min_rerank_score=0.5,
         embedding_func=EmbeddingFunc(
             embedding_dim=768,
             max_token_size=8192,
@@ -103,7 +66,7 @@ async def index_data(rag: LightRAG, dir_path: str):
                 file_paths= [file_path for _ in list_of_texts]
 
                 await rag.ainsert(input=list_of_texts, file_paths=file_paths)
-                LOGGER.warning(f"Data file not found: {filename}")
+
 
     # if file_path.endswith(".pdf"):
     #     with pdfplumber.open(file_path) as pdf:
