@@ -1,13 +1,11 @@
 import os, sys, asyncio
 from time import time
-from utils.logging_config import LOGGER
-from lightrag_implementation.basic_operations import initialize_rag, index_data
+from logging_config import LOGGER
+from basic_operations import initialize_rag, index_data
 from lightrag_implementation.retrieve import run_async_query
 from dotenv import load_dotenv
 
 load_dotenv()
-print("BINDING_API_KEY:", os.getenv("RERANK_BINDING_API_KEY"))
-
 """
 1. Initialize RAG system
 2. Index data from specified directory
@@ -26,9 +24,10 @@ async def main(mode: str, data_path: str)-> None:
         LOGGER.info(f"Total time taken: {time() - tic} seconds")
 
         while (q :=input("> ")) != "exit":
-            resp_async = await run_async_query(rag, q, mode, top_k=19)
+            toc = time()
+            resp_async = await run_async_query(rag, q, mode)
             print("\n====== Query Result ======\n", resp_async)
-
+            LOGGER.info(f"Duration of answering: {toc} seconds\n")
     except Exception as e:
         LOGGER.error(f"An error occured: {e}")
     finally:

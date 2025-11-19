@@ -6,6 +6,6 @@ async def run_async_query(rag: LightRAG, question: str, mode: str, top_k: int = 
     """
     return await rag.aquery(
         query=question,
-        param=QueryParam(mode=mode, enable_rerank=True) #top_k=top_k,
+        param=QueryParam(mode=mode, enable_rerank=True, include_references=True) #top_k=top_k,
         #system_prompt="You are a helpful assistant that provides accurate and concise information. Answer the user's question based on the retrieved documents."
     )

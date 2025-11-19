@@ -1,19 +1,13 @@
-import os, sys, asyncio, pdfplumber, json
-import torch
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
-from utils.logging_config import LOGGER
-from utils.graph_utils import read_json_file
+import os, pdfplumber, json
+from utils import read_json_file
 from lightrag.lightrag import LightRAG
 from functools import partial
-from lightrag.rerank import cohere_rerank, generic_rerank_api, jina_rerank
+from lightrag.rerank import generic_rerank_api
 from lightrag.llm.ollama import ollama_model_complete, ollama_embed
 from lightrag.utils import EmbeddingFunc
 from lightrag.kg.shared_storage import initialize_share_data, initialize_pipeline_status
-from langchain_community.document_loaders import DirectoryLoader, TextLoader, JSONLoader
-from langchain.text_splitter import CharacterTextSplitter
-from typing import Any, Dict
 
-WORKING_DIR = "./lightrag_implementation/rag_storage"
+WORKING_DIR = "./rag_storage"
 if not os.path.exists(WORKING_DIR):
     os.makedirs(WORKING_DIR)
 
@@ -50,13 +44,18 @@ async def initialize_rag(working_dir: str = WORKING_DIR) -> LightRAG:
     await rag.initialize_storages()
     # Ensure shared dicts exist
     initialize_share_data()
-    # Initialize pipeline status for document processing
+
     await initialize_pipeline_status()
 
     return rag
 
 async def index_data(rag: LightRAG, dir_path: str):
     """Indexes data from the given file path into the RAG system."""
+    if not os.path.isdir(dir_path):
+        return f"Error: {dir_path} is not a valid directory."
+    elif os.path.isdir(dir_path) and not any(f.endswith("unique.json") for f in os.listdir(dir_path)):
+        return f"Error: No 'unique.json' files found in {dir_path}. The .msg files must first be preprocessed."
+
     for filename in os.listdir(dir_path):
             if filename.endswith("unique.json"):
                 file_path = os.path.abspath(os.path.join(dir_path, filename))
