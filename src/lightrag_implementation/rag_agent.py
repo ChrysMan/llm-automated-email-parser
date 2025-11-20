@@ -5,7 +5,9 @@ from pydantic_ai.agent import Agent
 from lightrag import LightRAG, QueryParam
 from langchain_neo4j import Neo4jGraph
 from basic_operations import initialize_rag, index_data
+from pydantic_ai.models.huggingface import HuggingFaceModel
 from dotenv import load_dotenv
+import argparse
 
 load_dotenv()
 
@@ -13,6 +15,8 @@ WORKING_DIR = "./rag_storage"
 if not os.path.exists(WORKING_DIR):
     os.makedirs(WORKING_DIR)
 
+#moonshotai/Kimi-K2-Thinking
+model = HuggingFaceModel("moonshotai/Kimi-K2-Thinking")
 @dataclass
 class RAGDeps:
     """Dependencies for the RAG agent."""
@@ -20,9 +24,12 @@ class RAGDeps:
 
 # Create the Pydantic AI agent
 agent = Agent(
-    "huggingface:Qwen/QwQ-32B", # fix
+    model, # fix
     deps_type=RAGDeps,
-    #system_prompt="You are a knowledgeable assistant that uses a Retrieval-Augmented Generation (RAG) system to provide accurate and concise information based on retrieved documents.",
+    system_prompt="""You are a knowledgeable assistant that uses a Retrieval-Augmented Generation (RAG) system to provide accurate and concise information based on retrieved documents. 
+    Use the reinitialize_rag_storage to delete the graph and reinitialize rag. Use the add_data tool to add data into the graph. Use the retrieve tool when you want to retrieve information
+    from the graph. Use the close tool to finalize and close the lightRAG pipeline. If the graph doesn't contain the answer, clearly state that the information isn't available in the graph.
+    """
 )
 
 @agent.tool
@@ -35,6 +42,8 @@ async def reinitialize_rag_storage(context: RunContext[RAGDeps]) -> str:
     Returns:
         str: Confirmation message upon completion.
     """
+    if context.deps.lightrag:
+          await context.deps.lightrag.finalize_storages()
     try:
         graph = Neo4jGraph(
             url=os.getenv('NEO4J_URI'),
@@ -122,3 +131,38 @@ async def close(context: RunContext[RAGDeps]) -> str:
     
     except Exception as e:
         return f"Error while closing the RAG pipeline: {e}"
+    
+async def run_rag_agent(question: str) -> str:
+    """Run the RAG agent to answer a question about Pydantic AI.
+    
+    Args:
+        question: The question to answer.
+        
+    Returns:
+        The agent's response.
+    """
+    # Create dependencies
+    lightrag = await initialize_rag()
+    deps = RAGDeps(lightrag=lightrag)
+    
+    # Run the agent
+    result = await agent.run(question, deps=deps)
+    
+    return result.data
+
+def main():
+    """Main function to parse arguments and run the RAG agent."""
+    parser = argparse.ArgumentParser(description="Who is Sofia Stafylaraki?")
+    parser.add_argument("--question", help="The question to answer about Pydantic AI")
+
+    args = parser.parse_args()
+
+    # Run the agent
+    response = asyncio.run(run_rag_agent(args.question))
+
+    print("\nResponse:")
+    print(response)
+
+
+if __name__ == "__main__":
+    main()

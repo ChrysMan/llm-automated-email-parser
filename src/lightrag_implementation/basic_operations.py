@@ -75,7 +75,7 @@ async def index_data(rag: LightRAG, dir_path: str):
     #     await rag.ainsert(texts)
     # else:
     #     LOGGER.warning(f"Unsupported file format for {file_path}")
-
+    # deepseek modelo
 
 
 

@@ -2,7 +2,7 @@ import os, sys, asyncio
 from time import time
 from logging_config import LOGGER
 from basic_operations import initialize_rag, index_data
-from lightrag_implementation.retrieve import run_async_query
+from retrieve import run_async_query
 from dotenv import load_dotenv
 
 load_dotenv()
