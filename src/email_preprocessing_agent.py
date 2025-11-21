@@ -7,7 +7,7 @@ from email import message_from_string
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from utils.graph_utils import extract_msg_file, clean_data, split_email_thread
 from agents.preprocessing_agent import clean_email_llm
-from utils.prompts import cleaning_prompt, formatting_headers_prompt, translator_prompt_template, headers_cleaning_prompt, signature_cleaning_prompt,extraction_prompt
+from utils.prompts import cleaning_prompt, formatting_headers_prompt, translator_prompt_template, overall_cleaning_prompt
 
 if __name__ == "__main__":
 
@@ -45,9 +45,9 @@ if __name__ == "__main__":
         attn_implementation="sdpa",
         device_map="auto",
         max_memory={
-            1: "16GB",  # allow GPU 1
-            2: "16GB",   # allow GPU 0
-            3: "16GB"    # allow GPU 1
+            1: "16GB",  # allow GPU 0
+            2: "16GB",   # allow GPU 1
+            3: "16GB"    # allow GPU 2
         }
     )#.to(device0)
 
@@ -62,13 +62,13 @@ if __name__ == "__main__":
             tic2 = time()
 
             try:
-                 with open("/home/chryssida/src/Texts/AE-230009-split.txt", "a") as f:
-                    raw_msg_content = extract_msg_file(file_path)
-                    cleaned_msg_content = clean_data(raw_msg_content)
-                    splitted_emails = split_email_thread(cleaned_msg_content)
+                #  with open("/home/chryssida/src/Texts/AE-230009-split.txt", "a") as f:
+                raw_msg_content = extract_msg_file(file_path)
+                cleaned_msg_content = clean_data(raw_msg_content)
+                splitted_emails = split_email_thread(cleaned_msg_content)
 
-                    joined = "\n-***-\n".join(splitted_emails)
-                    f.write(joined)
+                    # joined = "\n-***-\n".join(splitted_emails)
+                    # f.write(joined)
             except Exception as e:
                 LOGGER.error(f"Failed to extract or clean email from {filename}: {e}")
                 continue
@@ -78,11 +78,12 @@ if __name__ == "__main__":
                 for email in splitted_emails:
                     count += 1
                     
-                    formatted_email = clean_email_llm(email, prompt=formatting_headers_prompt, model=model, tokenizer=tokenizer, trace_name=f"format_email_headers_{filename}_{count}", device=device0)
-                    translated_email = clean_email_llm(formatted_email, prompt=translator_prompt_template, model=model, tokenizer=tokenizer, trace_name=f"translate_{filename}_{count}", device=device0)
-                    cleaned_from_signatures_headers = clean_email_llm(translated_email, prompt=cleaning_prompt, model=model, tokenizer=tokenizer, trace_name=f"clean_email_{filename}_{count}", device=device0)
+                    cleaned_email = clean_email_llm(email, prompt=overall_cleaning_prompt, model=model, tokenizer=tokenizer, trace_name=f"clean_email_{filename}_{count}")
+                    # formatted_email = clean_email_llm(email, prompt=formatting_headers_prompt, model=model, tokenizer=tokenizer, trace_name=f"format_email_headers_{filename}_{count}", device=device0)
+                    # translated_email = clean_email_llm(formatted_email, prompt=translator_prompt_template, model=model, tokenizer=tokenizer, trace_name=f"translate_{filename}_{count}", device=device0)
+                    # cleaned_from_signatures_headers = clean_email_llm(translated_email, prompt=cleaning_prompt, model=model, tokenizer=tokenizer, trace_name=f"clean_email_{filename}_{count}", device=device0)
                     
-                    msg = message_from_string(cleaned_from_signatures_headers)
+                    msg = message_from_string(cleaned_email)
                     email_dict = {
                     "from": msg["From"],
                     "sent": msg["Sent"],

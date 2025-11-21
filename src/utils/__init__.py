@@ -13,8 +13,8 @@ from .graph_utils import (
 from .prompts import (
     EmailInfo,
     extraction_prompt,
-    headers_cleaning_prompt,
-    signature_cleaning_prompt
+    overall_cleaning_prompt,
+    
 )
 from .logging_config import LOGGER  
 
@@ -31,7 +31,6 @@ __all__ = [
     "smart_chunker",
     "EmailInfo",
     "extraction_prompt",
-    "headers_cleaning_prompt",
-    "signature_cleaning_prompt",
+    "overall_cleaning_prompt",
     "LOGGER"
 ]

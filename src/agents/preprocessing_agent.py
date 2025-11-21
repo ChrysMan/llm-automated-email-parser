@@ -16,15 +16,13 @@ from langsmith import traceable, trace, Client
 from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig
 from langchain_core.output_parsers import JsonOutputParser
 from utils.logging_config import LOGGER
-from utils.prompts import EmailInfo, extraction_prompt
+from utils.prompts import EmailInfo
 from utils.graph_utils import clean_data
-
-#client = Client()
 
 parser = JsonOutputParser(pydantic_object=EmailInfo, json_compatible=True)
 
 @traceable
-def clean_email_llm(email_text:str, prompt, model:AutoModelForCausalLM, tokenizer: AutoTokenizer, trace_name:str, device:torch.device) -> str:
+def clean_email_llm(email_text:str, prompt, model:AutoModelForCausalLM, tokenizer: AutoTokenizer, trace_name:str) -> str:
     """Cleans the email text by removing unnecessary information and formatting."""
     try:
         with trace(
