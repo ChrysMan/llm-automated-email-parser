@@ -10,7 +10,8 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from utils.graph_utils import extract_msg_file, clean_data, split_email_thread
 from agents.preprocessing_agent import clean_email_llm
 from utils.prompts import cleaning_prompt, formatting_headers_prompt, translator_prompt_template, overall_cleaning_prompt
-
+from openai import OpenAI
+from concurrent.futures import ThreadPoolExecutor
 
 load_dotenv()
 
@@ -25,32 +26,39 @@ else:
 class LLMPredictor:
 
     def __init__(self):
-        self.llm = LLM(
-            model="Qwen/Qwen2.5-14B-Instruct",
-            tensor_parallel_size=2,
-            trust_remote_code=True,
-            enforce_eager=True,
-            dtype='float16',
-            gpu_memory_utilization=0.7,
-            cpu_offload_gb=3,
-            max_model_len=8192
-        )
-
-        self.sampling_params = SamplingParams(
-            temperature=0,
-            max_tokens=4096,
-            stop="End of email",
-            detokenize=True
+        self.client = OpenAI(
+            base_url="http://localhost:8001/v1",
+            api_key="EMPTY"
         )
         
     @traceable
+    def process_single_prompt(self, prompt:str)->str:
+        """Processes a single prompt using the standard completions API."""
+        response = self.client.completions.create(
+            model="Qwen/Qwen2.5-14B-Instruct",
+            prompt=prompt,
+            temperature=0,
+            max_tokens=2048,
+            stop="End of email"
+        )
+
+        return response.choices[0].text
+    
+    @traceable
     def __call__(self, prompt_list: List[str])->List[dict]:
-        outputs = self.llm.generate(prompt_list, self.sampling_params)
-
         preprocessed_emails = []
+        
+        # FIX 1: Use ThreadPoolExecutor for concurrent/parallel API calls to vLLM.
+        # This replaces the native vLLM batching. Max 8 concurrent workers is a safe start.
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            # map applies process_single_prompt to every item in prompt_list
+            outputs = list(executor.map(self.process_single_prompt, prompt_list))
 
-        for output in outputs:
-            msg = message_from_string(output)
+        # FIX 2: Process all collected outputs (strings)
+        for generated_text in outputs:
+            # message_from_string requires a string, which is now correctly passed
+            msg = message_from_string(generated_text) 
+            
             email_dict = {
                     "from": msg["From"],
                     "sent": msg["Sent"],
@@ -61,7 +69,7 @@ class LLMPredictor:
                     }
             preprocessed_emails.append(email_dict)
 
-            return preprocessed_emails
+        return preprocessed_emails
         
 def main():
     tic1 = time()
@@ -80,33 +88,27 @@ def main():
 
     predictor = LLMPredictor()
 
-    preprocessed_emails = []
+    all_emails_to_process = []
     for filename in os.listdir(dir_path):
         if filename.endswith(".msg"):
             file_path = os.path.join(dir_path, filename)
 
-            tic2 = time()
             try:
-            #  with open("/home/chryssida/src/Texts/AE-230009-split.txt", "a") as f:
                 raw_msg_content = extract_msg_file(file_path)
                 cleaned_msg_content = clean_data(raw_msg_content)
-                splitted_emails = split_email_thread(cleaned_msg_content)
+                all_emails_to_process.extend(split_email_thread(cleaned_msg_content))
 
-                    # joined = "\n-***-\n".join(splitted_emails)
-                    # f.write(joined)
             except Exception as e:
                 LOGGER.error(f"Failed to extract or clean email from {filename}: {e}")
                 continue
 
-            prompts = [overall_cleaning_prompt.format(email=e) for e in splitted_emails]
+    # Prepare all prompts outside the file loop
+    prompts = [overall_cleaning_prompt.format(email=e) for e in all_emails_to_process]
 
-            preprocessed_emails.append(predictor(prompts))
-            LOGGER.info(f"Time taken to process {filename}: {time() - tic2} seconds")
-
-    predictor.llm.shutdown()
+    results = predictor(prompts)
 
     with open(output_path, "w", encoding="utf-8") as file:
-        json.dump(preprocessed_emails, file, indent=4, ensure_ascii=False, default=str)
+        json.dump(results, file, indent=4, ensure_ascii=False, default=str)
 
     LOGGER.info(f"Time taken to process: {time() - tic1} seconds")
 

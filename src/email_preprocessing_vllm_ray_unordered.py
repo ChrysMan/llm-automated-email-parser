@@ -17,22 +17,26 @@ from dotenv import load_dotenv
 assert Version(ray.__version__) >= Version(
     "2.22.0"), "Ray version must be at least 2.22.0"
 
+RAY_TEMP_DIR = os.path.join(os.path.expanduser("~"), "ray_temp_store")
+os.makedirs(RAY_TEMP_DIR, exist_ok=True) 
+
 load_dotenv()
 hf_token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 langsmith_api_key = os.getenv("LANGSMITH_API_KEY")
 client = Client()
 
-if not langsmith_api_key:
+if langsmith_api_key:
     os.environ["LANGCHAIN_TRACING_V2"] = "true"
     os.environ["LANGCHAIN_ENDPOINT"]="https://api.smith.langchain.com"
+    os.environ["LANGSMITH_PROJECT"] = "email_preprocessing_vllm_unordered"
 else:
     LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
 
 # Set tensor parallelism per instance.
-tensor_parallel_size = 1
+tensor_parallel_size = 2
 
 # Set number of instances. Each instance will use tensor_parallel_size GPUs.
-num_instances = 8
+num_instances = 2
 
 class EmailInfo(BaseModel):
     """Data model for email extracted information."""
@@ -87,15 +91,14 @@ class LLMPredictor:
         self.llm = LLM(model=model_tag,
                        tensor_parallel_size=tensor_parallel_size, 
                        dtype = 'float16',
-                       gpu_memory_utilization=0.95,
-                       max_seq_len_to_capture=4096,
-                       max_model_len=8192,
-                       cpu_offload_gb=3,
+                       gpu_memory_utilization=0.7,
+                       max_model_len=3500,
+                       #cpu_offload_gb=2,
                        enforce_eager=True
             )
         
         self.parser = parser
-        self.sampling_params = SamplingParams(temperature=0, max_tokens=3500)
+        self.sampling_params = SamplingParams(temperature=0, max_tokens=2048)
 
     def __call__(self, chunk: List[str]) -> List[Dict]:
         """Generates structured outputs from email chunk."""
@@ -127,9 +130,12 @@ class LLMPredictor:
             finally:
                 run.end()        
 
-ray.init(ignore_reinit_error=True)
+ray.init(
+    _temp_dir=RAY_TEMP_DIR,  # <--- This bypasses the full /tmp/ray directory
+    ignore_reinit_error=True
+)
 
-@ray.remote(num_gpus=1, num_cpus=1)
+@ray.remote(num_gpus=2, num_cpus=2)
 class RayLLMActor:
     def __init__(self, model_tag: str, tensor_parallel_size: int):
         self.predictor = LLMPredictor(model_tag, tensor_parallel_size)
@@ -147,7 +153,7 @@ class RayLLMActor:
         result = self.predictor(chunk)
         return idx, result
 
-def process_directory_distributed(dir_path: str) -> List[Dict]:
+def process_directory_distributed(dir_path: str, model: str) -> List[Dict]:
     """
     Processes all .msg files in a directory using dynamic task assignment across actors.
     Returns a flat list of extracted email dictionaries.
@@ -188,7 +194,7 @@ def process_directory_distributed(dir_path: str) -> List[Dict]:
         LOGGER.error(f"Failed to preprocess {filename}: {e}")
 
     # --- Start the actors dynamically based on GPUs needed ---
-    actors = [RayLLMActor.remote(model_tag, tensor_parallel_size) for _ in range(gpus_needed)]
+    actors = [RayLLMActor.remote(model, tensor_parallel_size) for _ in range(gpus_needed)]
     ray.get([a.warmup.remote() for a in actors])
     pool = ActorPool(actors)
 
@@ -235,7 +241,7 @@ if __name__ == "__main__":
     model_tag = "Qwen/Qwen2.5-7B-Instruct"
 
     try:
-        email_data = process_directory_distributed(dir_path=dir_path)
+        email_data = process_directory_distributed(dir_path=dir_path, model= model_tag)
 
         output_path = os.path.join(dir_path, f"{os.path.basename(dir_path)}.json")
         with open(output_path, "w", encoding="utf-8") as f:
