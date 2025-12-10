@@ -12,7 +12,7 @@ if langsmith_api_key:
 else:
     LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
 
-from langsmith import traceable, trace, Client
+from langsmith import traceable, trace
 from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig
 from langchain_core.output_parsers import JsonOutputParser
 from utils.logging_config import LOGGER

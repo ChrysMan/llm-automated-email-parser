@@ -1,6 +1,7 @@
 import sys
 import spacy, json, faiss, re, os
 import numpy as np
+from typing import List
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings.spacy_embeddings import SpacyEmbeddings
 from langchain_community.docstore.in_memory import InMemoryDocstore
@@ -9,14 +10,13 @@ from utils.graph_utils import read_json_file, write_file
 
 FAISS_DB_PATH = "/home/chryssida/src/faiss_db.index"
 
-def deduplicate_emails(file_path: str) -> list[str]:
+def deduplicate_emails(dict_list: List[dict]) -> list[str]:
     try:
-        json_sentences = read_json_file(file_path)
-        json_sentences.reverse()
+        dict_list.reverse()
 
         email_texts = [f"from: {item.get('from','')}\nsent: {item.get('sent','')}\nto:{item.get('to','')}\ncc:{item.get('cc','')}\nsubject:{item.get('subject','')}\nbody:{item.get('body','')}" 
-                for item in json_sentences]
-        email_bodies = [f"body:{item.get('body','')}" for item in json_sentences]
+                for item in dict_list]
+        email_bodies = [f"body:{item.get('body','')}" for item in dict_list]
     except Exception as e:
         LOGGER.error(f"Failed to read JSON file: {e}")
 
@@ -24,10 +24,10 @@ def deduplicate_emails(file_path: str) -> list[str]:
 
     partially_unique_emails = list(dict.fromkeys(email_texts))
     expected_unique_emails_bodies = list(dict.fromkeys(email_bodies))
-    print("\nLength of email before set", len(email_texts))
-    print("\nLength of emails after set", len(partially_unique_emails))
-    print("\nLength of email bodies before set", len(email_bodies))
-    print("\nLength of emails bodies after set", len(expected_unique_emails_bodies))
+    # print("\nLength of email before set", len(email_texts))
+    # print("\nLength of emails after set", len(partially_unique_emails))
+    # print("\nLength of email bodies before set", len(email_bodies))
+    # print("\nLength of emails bodies after set", len(expected_unique_emails_bodies))
 
     partially_unique_emails_bodies = [text.split("body:", 1)[1] for text in partially_unique_emails]
     
@@ -58,8 +58,8 @@ def deduplicate_emails(file_path: str) -> list[str]:
                 dedup_index.add(embedding_bodies)   # add to in memory db
                 unique_emails.append(email)
             else:
-                #continue
-                print(f"\n\nOriginal email: \n{email}\n\nMatched email:\n{mathed_email}\n\nSimilarity:\n{similarity}")
+                continue
+                #print(f"\n\nOriginal email: \n{email}\n\nMatched email:\n{mathed_email}\n\nSimilarity:\n{similarity}")
     return unique_emails
 
 def create_faiss_db(unique_emails: list[str]):
@@ -99,7 +99,8 @@ if __name__ == "__main__":
 
     dir_path = os.path.dirname(file_path)
     try:
-        unique_emails = deduplicate_emails(file_path)
+        json_sentences = read_json_file(file_path)
+        unique_emails = deduplicate_emails(json_sentences)
 
         output_path = os.path.join(dir_path, f"{os.path.basename(dir_path)}_unique.json")
         

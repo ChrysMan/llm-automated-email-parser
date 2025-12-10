@@ -1,9 +1,11 @@
 import os, pdfplumber, json
 from utils import read_json_file
-from lightrag.lightrag import LightRAG
+from lightrag.lightrag import LightRAG, QueryParam
 from functools import partial
 from lightrag.rerank import generic_rerank_api
 from lightrag.llm.ollama import ollama_model_complete, ollama_embed
+from lightrag.llm.hf import hf_model_complete
+from lightrag.llm.openai import openai_complete, openai_complete_if_cache
 from lightrag.utils import EmbeddingFunc
 from lightrag.kg.shared_storage import initialize_share_data, initialize_pipeline_status
 
@@ -18,15 +20,28 @@ rerunk_func = partial(
     api_key=os.getenv("RERANK_BINDING_API_KEY")
 )
 
+async def llm_model_func(
+    prompt, system_prompt=None, history_messages=[], keyword_extraction=False, **kwargs
+) -> str:
+    return await openai_complete_if_cache(
+        os.getenv("LLM_MODEL", "meta-llama/Llama-3.1-8B"),
+        prompt,
+        system_prompt=system_prompt,
+        history_messages=history_messages,
+        api_key=os.getenv("LLM_BINDING_API_KEY") or os.getenv("OPENAI_API_KEY"),
+        base_url=os.getenv("LLM_BINDING_HOST"),
+        **kwargs,
+    )
+
 async def initialize_rag(working_dir: str = WORKING_DIR) -> LightRAG:
 
     rag = LightRAG(
         working_dir=working_dir,
         graph_storage="Neo4JStorage",
-        llm_model_func=ollama_model_complete,
-        llm_model_name="llama3.1:8b",#"qwen2.5:14b",
+        llm_model_func=llm_model_func, #llm_model_func, #ollama_model_complete,
+        #llm_model_name="qwen2.5:14b", #"Piyush20/Qwen_14B_Quantized", #"qwen2.5:14b", #"llama3.1:8b",
         llm_model_max_async=4,
-        llm_model_kwargs={"host": "http://localhost:11434", "options": {"num_ctx": 32768}},
+        #llm_model_kwargs={"host": "http://localhost:11434", "options": {"num_ctx": 32768}},
         vector_storage="FaissVectorDBStorage",
         rerank_model_func=rerunk_func,
         min_rerank_score=0.5,
@@ -49,7 +64,7 @@ async def initialize_rag(working_dir: str = WORKING_DIR) -> LightRAG:
 
     return rag
 
-async def index_data(rag: LightRAG, dir_path: str):
+async def index_data(rag: LightRAG, dir_path: str)-> str:
     """Indexes data from the given file path into the RAG system."""
     if not os.path.isdir(dir_path):
         return f"Error: {dir_path} is not a valid directory."
@@ -65,6 +80,8 @@ async def index_data(rag: LightRAG, dir_path: str):
                 file_paths= [file_path for _ in list_of_texts]
 
                 await rag.ainsert(input=list_of_texts, file_paths=file_paths)
+                
+                return f"Indexing of data from {file_path} completed."
 
 
     # if file_path.endswith(".pdf"):
@@ -78,5 +95,14 @@ async def index_data(rag: LightRAG, dir_path: str):
     # deepseek modelo
 
 
+async def run_async_query(rag: LightRAG, question: str, mode: str, top_k: int = 5) -> str:
+    """
+    Execute an async RAG query using .aquery method
+    """
+    return await rag.aquery(
+        query=question,
+        param=QueryParam(mode=mode, enable_rerank=True, include_references=True) #top_k=top_k,
+        #system_prompt="You are a helpful assistant that provides accurate and concise information. Answer the user's question based on the retrieved documents."
+    )
 
         

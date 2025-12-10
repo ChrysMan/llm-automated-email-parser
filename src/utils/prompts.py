@@ -32,25 +32,25 @@ Task 1: Translate every non-English segment into proper natural English words. I
     Translation Rules:
     1. Do not modify text that is already in English. 
     2. Do not use transliteration. For example "Δευτέρα" becomes "Monday", not "Deutera".  
+                                                       
+Task 2: Pay **attention** to this step! Remove irrelevant text from the end of the email body.
+    Signature cleaning rules:
+    1. Identify a signature block: It begins with a closing greeting "Best regards", "Thanks and Best regards", "Kind regards", "Sincerely", "Yours faithfully", "Tks & Best Regards", "Ευχαριστώ", "Ευχαριστώ πολύ", "Με εκτίμηση" or similar) and ends with the sender's name on the next line.  
+    2. Delete everything after the sender's name: phone numbers, job titles, company names, disclaimers, antivirus notices, footers, or device signatures.  
+    3. If no closing greeting + name is found, remove only irrelevant trailing text (like disclaimers, antivirus notices, footers, device signatures). 
+    4. If you find irrelevant text like notes, disclaimers etc before the signature block, remove it with caution, only if it is clearly not part of the email body.
+    5. Preserve the body until the cut point.  
                                                                                                               
-Task 2: Reformat email headers into a standardized structure while preserving the email text exactly as it appears in the input.
+Task 3: Reformat email headers into a standardized structure while preserving the email text exactly as it appears in the input.
     Formatting Rules: 
     1. Format headers into the following fields (in this exact order):
         - From: + sender (exactly as in input)
-        - Sent: + date/time converted into English format → Full weekday name, full month name day, four-digit year, hour:minute:second AM/PM. Do not change the actual date/time values, only reformat them. "πμ" becomes "AM", "μμ" becomes "PM".
+        - Sent: + date/time converted into English format -> Full weekday name, full month name day, four-digit year, hour:minute:second AM/PM. Do not change the actual date/time values, only reformat them. "πμ" becomes "AM", "μμ" becomes "PM".
         - To: + recipients (leave blank if not specified)
         - Cc: + recipients (leave blank if not specified)
         - Subject: + subject text (stop reading subject after the newline; leave blank if not specified)
         - In a newline copy the entire body text after the subject line exactly as in the input (preserve all line breaks, spaces, punctuation). 
-
-Task 3: Remove irrelevant text from the end of the email body 
-    Signature cleaning rules:
-    1. A signature block begins with a closing greeting "Best regards", "Thanks and Best regards", "Kind regards", "Sincerely", "Yours faithfully", "Tks & Best Regards", "Ευχαριστώ", "Ευχαριστώ πολύ", "Με εκτίμηση" or similar) and ends with the sender's name on the next line.  
-    2. Delete everything after the sender's name: phone numbers, job titles, company names, disclaimers, antivirus notices, footers, or device signatures.  
-    3. If no closing greeting + name is found, remove only irrelevant trailing text (like disclaimers, antivirus notices, footers, device signatures). 
-    4. If you find irrelevant text like notes, disclaimers etc before the signature block, remove it with caution, only if it is clearly not part of the email body.
-    5. Preserve the body until the cut point.                     
-                                                                                            
+                                                                           
 Task 4: Remove duplicates and apostrophes (" or ') from the contacts in the headers. 
     Headers cleaning rules:
     1. Process the fields "From:", "To:", "Cc:"  sequentially, using the following rules in order:
@@ -125,6 +125,93 @@ Process the following email:
 <|start_header_id|>assistant<|end_header_id>                                                                                                                                                                   
 """
 )
+
+formatter_and_translator_prompt = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
+You are an email cleaning agent. Consistency and strict adherence to rules are critical.
+You have to follow the tasks sequencially. The output of every task will be the input to the next task.                                         
+
+Task 1: Translate every non-English segment into proper natural English words. If everything is in English proceed to the next task. 
+    Translation Rules:
+    1. Do not modify text that is already in English. 
+    2. Do not use transliteration. For example "Δευτέρα" becomes "Monday", not "Deutera".  
+                                                                                                              
+Task 2: Reformat email headers into a standardized structure while preserving the email text exactly as it appears in the input.
+    Formatting Rules: 
+    1. Format headers into the following fields (in this exact order):
+        - From: + sender (exactly as in input)
+        - Sent: + date/time converted into English format -> Full weekday name, full month name day, four-digit year, hour:minute:second AM/PM. Do not change the actual date/time values, only reformat them. "πμ" becomes "AM", "μμ" becomes "PM".
+        - To: + recipients (leave blank if not specified)
+        - Cc: + recipients (leave blank if not specified)
+        - Subject: + subject text (stop reading subject after the newline; leave blank if not specified)
+        - In a newline copy the entire body text after the subject line exactly as in the input (preserve all line breaks, spaces, punctuation).                                                                
+
+Output format:
+   - The output must always start with "From:" and end with newline + "End of email".    
+
+Example 1:
+Input: 
+On May 30, 2023, at 11:23, Maria Doe wrote:
+Goodmorning Mr Manoudakis,
+Λάβαμε μια ενημέρωση σχετικά με μια νέα αποστολή στις 12:00 μμ.
+Note: The office will be closed on the 28th of October.
+Best regards
+Maria Doe (Mrs.)
+Export Manager
+Company XYZ Ltd.    
+
+Output:
+From: Maria Doe 
+Sent: Tuesday, May 30, 2023 11:23 AM
+To: 
+Cc:
+Subject:
+Goodmorning Mr Manoudakis,
+We received an update about a new shipment at 12:00 pm.
+Best regards
+Maria Doe (Mrs.)
+Export Manager
+Company XYZ Ltd.    
+End of email          
+
+Example 2:
+Input:                                                      
+发件人:  约翰·多伊 
+发送日期: 29/12/2023, 22:00 μμ
+收件人: 'Nefeli Joe'; Zoi Papa <zoipap@gmail.com>
+Cc: Mary Joe; harapap@gmail.com; Kate Doe <katedoe@example.com
+主题: Προσφορά για Ντουμπάι
+MBL SWB
+Goodmorning Mr Papadopoulos,
+We received an update about a new shipment.
+Kind regards
+John Doe 
+190, Venizelos Str 12345 Salamina – Greece
+This email has been scanned by XYZ AntiVirus.                
+
+Output:
+From:  John Doe 
+Sent: Friday, December 29, 2023 22:00 PM
+To: 'Nefeli Joe'; Zoi Papa <harapap@gmail.com>
+Cc: Mary Joe; harapap@gmail.com; Kate Doe <katedoe@example.com> 
+Subject: Offer for Dubai
+MBL SWB                                                      
+Goodmorning Mr Papadopoulos,
+We received an update about a new shipment.
+Kind regards
+John Doe 
+190, Venizelos Str 12345 Salamina – Greece
+This email has been scanned by XYZ AntiVirus.
+End of email   
+
+Process the following email:
+<|eot_id|>
+<|start_header_id|>user<|end_header_id|>
+{email}
+<|eot_id|>
+<|start_header_id|>assistant<|end_header_id>                                                                                                                                                                   
+"""
+)
+
 
 formatting_headers_prompt = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
 You are an email formatting agent. The formatted output will be used in automated downstream parsing, so consistency and strict adherence to rules are critical.

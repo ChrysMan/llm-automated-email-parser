@@ -1,8 +1,7 @@
 import os, sys, asyncio
 from time import time
-from logging_config import LOGGER
-from basic_operations import initialize_rag, index_data
-from retrieve import run_async_query
+from src.utils.logging_config import LOGGER
+from basic_operations import initialize_rag, index_data, run_async_query
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -19,7 +18,12 @@ async def main(mode: str, data_path: str)-> None:
     rag = None
     try:
         rag = await initialize_rag()
-        await index_data(rag, DOCS_PATH)
+        result_message = await index_data(rag, DOCS_PATH)
+        if "Error" in result_message:
+            LOGGER.error(result_message)
+            return
+        else:
+            LOGGER.info(result_message)
 
         LOGGER.info(f"Total time taken: {time() - tic} seconds")
 

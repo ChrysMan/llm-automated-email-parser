@@ -9,9 +9,9 @@ from typing import Optional, List, Dict, Tuple
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from utils.graph_utils import extract_msg_file, clean_data, split_email_thread
 from agents.preprocessing_agent import clean_email_llm
-from utils.prompts import cleaning_prompt, formatting_headers_prompt, translator_prompt_template, overall_cleaning_prompt
+from utils.prompts import cleaning_prompt, formatting_headers_prompt, translator_prompt_template, overall_cleaning_prompt, formatter_and_translator_prompt
 from openai import OpenAI
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 load_dotenv()
 
@@ -30,12 +30,12 @@ class LLMPredictor:
             base_url="http://localhost:8001/v1",
             api_key="EMPTY"
         )
-        
+
     @traceable
     def process_single_prompt(self, prompt:str)->str:
         """Processes a single prompt using the standard completions API."""
         response = self.client.completions.create(
-            model="Qwen/Qwen2.5-14B-Instruct",
+            model="Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8",
             prompt=prompt,
             temperature=0,
             max_tokens=2048,
@@ -44,31 +44,58 @@ class LLMPredictor:
 
         return response.choices[0].text
     
-    @traceable
+    # def __call__(self, prompt_list: List[str])->List[dict]:
+    #     preprocessed_emails = []
+        
+    #     # Use ThreadPoolExecutor for concurrent/parallel API calls to vLLM.
+    #     # This replaces the native vLLM batching.
+    #     with ThreadPoolExecutor(max_workers=8) as executor:
+    #         # map applies process_single_prompt to every item in prompt_list
+    #         futures = [executor.submit(self.process_single_prompt, prompt) for prompt in prompt_list]
+
+    #     for future in as_completed(futures):
+    #         try: 
+    #             generated_text=future.result()
+    #             msg = message_from_string(generated_text)
+    #             email_dict = {
+    #                     "from": msg["From"],
+    #                     "sent": msg["Sent"],
+    #                     "to": msg["To"],
+    #                     "cc" : msg["Cc"],
+    #                     "subject": msg["Subject"],
+    #                     "body": msg.get_payload()
+    #                     }
+    #             preprocessed_emails.append(email_dict)
+                
+    #         except Exception as e:
+    #             # Handle any exceptions that occurred in the worker thread
+    #             LOGGER.error(f"Thread failed during prompt processing: {e}")
+
+    #     return preprocessed_emails
+
     def __call__(self, prompt_list: List[str])->List[dict]:
         preprocessed_emails = []
         
-        # FIX 1: Use ThreadPoolExecutor for concurrent/parallel API calls to vLLM.
-        # This replaces the native vLLM batching. Max 8 concurrent workers is a safe start.
         with ThreadPoolExecutor(max_workers=8) as executor:
-            # map applies process_single_prompt to every item in prompt_list
-            outputs = list(executor.map(self.process_single_prompt, prompt_list))
+            generated_texts_iterator = list(executor.map(self.process_single_prompt, prompt_list))
 
-        # FIX 2: Process all collected outputs (strings)
-        for generated_text in outputs:
-            # message_from_string requires a string, which is now correctly passed
-            msg = message_from_string(generated_text) 
-            
-            email_dict = {
-                    "from": msg["From"],
-                    "sent": msg["Sent"],
-                    "to": msg["To"],
-                    "cc" : msg["Cc"],
-                    "subject": msg["Subject"],
-                    "body": msg.get_payload()
-                    }
-            preprocessed_emails.append(email_dict)
-
+            for generated_text in generated_texts_iterator:
+                try:
+                    # generated_text is the string result from process_single_prompt
+                    msg = message_from_string(generated_text)
+                    email_dict = {
+                            "from": msg["From"],
+                            "sent": msg["Sent"],
+                            "to": msg["To"],
+                            "cc" : msg["Cc"],
+                            "subject": msg["Subject"],
+                            "body": msg.get_payload()
+                            }
+                    preprocessed_emails.append(email_dict)
+                    
+                except Exception as e:
+                    LOGGER.error(f"Thread failed during prompt processing: {e}")
+                   
         return preprocessed_emails
         
 def main():
@@ -103,9 +130,14 @@ def main():
                 continue
 
     # Prepare all prompts outside the file loop
-    prompts = [overall_cleaning_prompt.format(email=e) for e in all_emails_to_process]
+    formatting_prompts = [formatter_and_translator_prompt.format(email=e) for e in all_emails_to_process]
+    results = predictor(formatting_prompts)
 
-    results = predictor(prompts)
+    str_results = [str(r) for r in results]
+
+    cleaning_prompts = [cleaning_prompt.format(email=e) for e in str_results]
+    results = predictor(cleaning_prompts)
+
 
     with open(output_path, "w", encoding="utf-8") as file:
         json.dump(results, file, indent=4, ensure_ascii=False, default=str)
