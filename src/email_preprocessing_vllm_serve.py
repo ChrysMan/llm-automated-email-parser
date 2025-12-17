@@ -27,15 +27,15 @@ class LLMPredictor:
 
     def __init__(self):
         self.client = OpenAI(
-            base_url="http://localhost:8001/v1",
-            api_key="EMPTY"
+            base_url=os.getenv("LLM_BINDING_HOST"),
+            api_key=os.getenv("LLM_BINDING_API_KEY")
         )
 
     @traceable
     def process_single_prompt(self, prompt:str)->str:
         """Processes a single prompt using the standard completions API."""
         response = self.client.completions.create(
-            model="Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8",
+            model=os.getenv("LLM_MODEL", "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8"),
             prompt=prompt,
             temperature=0,
             max_tokens=2048,

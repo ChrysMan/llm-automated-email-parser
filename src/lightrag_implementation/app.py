@@ -4,7 +4,7 @@ import nest_asyncio
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart
 
 from basic_operations import initialize_rag
-from rag_agent import agent, RAGDeps
+from agents.rag_agent import agent, RAGDeps
 
 from dotenv import load_dotenv
 

@@ -1,49 +1,63 @@
-import os, sys, json, asyncio, shutil
+import os, asyncio, shutil
 from dataclasses import dataclass
 from pydantic_ai import RunContext
 from pydantic_ai.agent import Agent
 from lightrag import LightRAG, QueryParam
 from langchain_neo4j import Neo4jGraph
-from basic_operations import initialize_rag, index_data
-from pydantic_ai.models.huggingface import HuggingFaceModel
+from lightrag_implementation.basic_operations import initialize_rag, index_data
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.providers.openai import OpenAIProvider
 from dotenv import load_dotenv
 import argparse
 
 load_dotenv()
 
-WORKING_DIR = "./rag_storage"
+WORKING_DIR = "./lightrag_implementation/rag_storage"
 if not os.path.exists(WORKING_DIR):
     os.makedirs(WORKING_DIR)
 
-#moonshotai/Kimi-K2-Thinking
-model = HuggingFaceModel("moonshotai/Kimi-K2-Thinking")
+model = OpenAIChatModel(
+    os.getenv("LLM_MODEL", "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8"),
+    provider = OpenAIProvider(
+        base_url=os.getenv("LLM_BINDING_HOST"), 
+        api_key=os.getenv("LLM_BINDING_API_KEY")
+    )    
+)
+
 @dataclass
-class RAGDeps:
-    """Dependencies for the RAG agent."""
+class KGDeps:
+    """Dependencies for the KG agent."""
     lightrag: LightRAG
 
 # Create the Pydantic AI agent
 agent = Agent(
-    model, # fix
-    deps_type=RAGDeps,
-    system_prompt="""You are a knowledgeable assistant that uses a Retrieval-Augmented Generation (RAG) system to provide accurate and concise information based on retrieved documents. 
-    Use the reinitialize_rag_storage to delete the graph and reinitialize rag. Use the add_data tool to add data into the graph. Use the retrieve tool when you want to retrieve information
-    from the graph. Use the close tool to finalize and close the lightRAG pipeline. If the graph doesn't contain the answer, clearly state that the information isn't available in the graph.
-    """
+    model,
+    deps_type=KgDeps,
+    system_prompt="""You are an Enterprise Email Intelligence Agent managing a LightRAG pipeline and Neo4j Knowledge Graph.
+
+    You have access to tools: add_data, reinitialize_rag_storage, and close.
+    If you need to use a tool, generate the tool call. Once the tool returns a result, summarize that result for the user.
+
+    OPERATIONAL RULES:
+    1. Data Integrity: Only use `add_data` when provided a directory path. Verify the existence of the directory before proceeding.
+    2. Safety: `reinitialize_rag_storage` is destructive. Use ONLY if the user explicitly asks to "wipe," "reset," or "clear" the entire system.
+    3. Finalization: You MUST call `close` when the user signals the end of a session (e.g., "exit", "stop", "bye") to ensure data is saved and connections are closed safely.
+    
+    TONE: Professional, secure."""
 )
 
 @agent.tool
-async def reinitialize_rag_storage(context: RunContext[RAGDeps]) -> str:
-    """Deletes all data in the RAG storage and Neo4j Graph. Reinitializes LightRAG.
+async def reinitialize_rag_storage(ctx: RunContext[KGDeps]) -> str:
+    """Deletes all data in the RAG storage and Neo4j Graph, then creates the clean LightRAG working directory and reinitializes LightRAG.
     
     Args:
-        context (RunContext[RAGDeps]): The run context containing dependencies.
+        ctx (RunContext[KGDeps]): The run context containing dependencies.
 
     Returns:
         str: Confirmation message upon completion.
     """
-    if context.deps.lightrag:
-          await context.deps.lightrag.finalize_storages()
+    if ctx.deps.lightrag:
+          await ctx.deps.lightrag.finalize_storages()
     try:
         graph = Neo4jGraph(
             url=os.getenv('NEO4J_URI'),
@@ -55,7 +69,7 @@ async def reinitialize_rag_storage(context: RunContext[RAGDeps]) -> str:
     except Exception as e:
         return f"Error connecting to Neo4j: {e}"
 
-    working_dir = context.deps.lightrag.working_dir
+    working_dir = ctx.deps.lightrag.working_dir
     if os.path.exists(working_dir):
         try:
             shutil.rmtree(working_dir)
@@ -69,55 +83,39 @@ async def reinitialize_rag_storage(context: RunContext[RAGDeps]) -> str:
         
     try:
         new_rag = await initialize_rag(working_dir=working_dir)
-        context.deps.lightrag = new_rag
+        ctx.deps.lightrag = new_rag
     except Exception as e:
         return f"Error reinitializing LightRAG: {e}"
     
-    return "RAG storage cleared and LightRAG reinitialized."
+    return "RAG storage has been cleared and LightRAG has been reinitialized."
 
 @agent.tool
-async def add_data(context: RunContext[RAGDeps], dir_path: str) -> str:
+async def add_data(ctx: RunContext[KGDeps], dir_path: str) -> str:
     """Adds data from the given file path into the RAG system.
     
     Args:
-        context (RunContext[RAGDeps]): The run context containing dependencies.
+        ctx (RunContext[KGDeps]): The run context containing dependencies.
         dir_path (str): The directory path containing data files to index.
 
     Returns:
         str: Confirmation message upon completion or Error message upon failure.
     """
-    await index_data(context.deps.lightrag, dir_path)
-    return "Data indexing completed."
+    if not os.path.isdir(dir_path):
+        return f"{dir_path} is not a valid directory."
+    return await index_data(ctx.deps.lightrag, dir_path)
 
 @agent.tool
-async def retrieve(context: RunContext[RAGDeps], question: str) -> str:
-    """
-    Retrieve relevant documents from the RAG system based on the question.
-
-    Args:
-        context (RunContext[RAGDeps]): The run context containing dependencies.
-        question (str): The user's question to retrieve information for.
-    
-    Returns:
-        str: The retrieved information from the RAG system.
-    """
-    return await context.deps.lightrag.aquery(
-        query=question,
-        param=QueryParam(mode="mix", enable_rerank=True, include_references=True)
-    )
-
-@agent.tool
-async def close(context: RunContext[RAGDeps]) -> str:
+async def close(ctx: RunContext[KGDeps]) -> str:
     """
     Safely finalize and close the LightRAG pipeline when instructed to "exit", "quit" or "stop"
 
     Args:
-        context (RunContext[RAGDeps]): The run context containing dependencies.
+        ctx (RunContext[KGDeps]): The run context containing dependencies.
 
     Returns:
         str: Confirmation message upon successful closing
     """
-    rag = context.deps.lightrag
+    rag = ctx.deps.lightrag
     if rag is None:
         return "No active RAG instance found. Nothing to close." 
     try:
@@ -143,17 +141,17 @@ async def run_rag_agent(question: str) -> str:
     """
     # Create dependencies
     lightrag = await initialize_rag()
-    deps = RAGDeps(lightrag=lightrag)
+    deps = KGDeps(lightrag=lightrag)
     
     # Run the agent
     result = await agent.run(question, deps=deps)
     
-    return result.data
+    return result.output
 
 def main():
-    """Main function to parse arguments and run the RAG agent."""
-    parser = argparse.ArgumentParser(description="Who is Sofia Stafylaraki?")
-    parser.add_argument("--question", help="The question to answer about Pydantic AI")
+    """Main function to parse arguments and run the kg agent."""
+    parser = argparse.ArgumentParser(description="This script queries the PydanticAI agent with a user question.")
+    parser.add_argument("--question", default="Add data to the graph from the directory /home/chryssida/DATA_TUC-KRITI/SEA IMPORT/234107.", help="The question to answer")
 
     args = parser.parse_args()
 

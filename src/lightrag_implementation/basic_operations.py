@@ -1,5 +1,6 @@
 import os, pdfplumber, json
-from utils import read_json_file
+from time import time
+from utils.graph_utils import read_json_file
 from lightrag.lightrag import LightRAG, QueryParam
 from functools import partial
 from lightrag.rerank import generic_rerank_api
@@ -9,7 +10,7 @@ from lightrag.llm.openai import openai_complete, openai_complete_if_cache
 from lightrag.utils import EmbeddingFunc
 from lightrag.kg.shared_storage import initialize_share_data, initialize_pipeline_status
 
-WORKING_DIR = "./rag_storage"
+WORKING_DIR = "./lightrag_implementation/rag_storage"
 if not os.path.exists(WORKING_DIR):
     os.makedirs(WORKING_DIR)
 
@@ -24,7 +25,7 @@ async def llm_model_func(
     prompt, system_prompt=None, history_messages=[], keyword_extraction=False, **kwargs
 ) -> str:
     return await openai_complete_if_cache(
-        os.getenv("LLM_MODEL", "meta-llama/Llama-3.1-8B"),
+        os.getenv("LLM_MODEL", "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8"),
         prompt,
         system_prompt=system_prompt,
         history_messages=history_messages,
@@ -78,10 +79,11 @@ async def index_data(rag: LightRAG, dir_path: str)-> str:
                 email_list = read_json_file(file_path)
                 list_of_texts = [json.dumps(j) for j in email_list]
                 file_paths= [file_path for _ in list_of_texts]
-
+                
+                tic = time()
                 await rag.ainsert(input=list_of_texts, file_paths=file_paths)
                 
-                return f"Indexing of data from {file_path} completed."
+                return f"Indexing of data from {file_path} completed at {time()-tic} seconds."
 
 
     # if file_path.endswith(".pdf"):
