@@ -1,19 +1,27 @@
-import os, asyncio, shutil
+import os, asyncio
 from dataclasses import dataclass
 from typing import List
 from pydantic import BaseModel, Field
 from pydantic_ai import RunContext
 from pydantic_ai.agent import Agent
-from lightrag import LightRAG, QueryParam
-from langchain_neo4j import Neo4jGraph
-from lightrag_implementation.basic_operations import initialize_rag, index_data
+from lightrag import QueryParam
+from lightrag_implementation.basic_operations import initialize_rag
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from langchain_openai import ChatOpenAI
+from lightrag_implementation.agents.agent_deps import AgentDeps
 from dotenv import load_dotenv
-import argparse
+from utils.logging_config import LOGGER
 
 load_dotenv()
+
+langsmith_api_key = os.getenv("LANGSMITH_API_KEY")
+if langsmith_api_key:
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_ENDPOINT"]="https://api.smith.langchain.com"
+    os.environ["LANGSMITH_PROJECT"] = "rag_agent"
+else:
+    LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
 
 WORKING_DIR = "./lightrag_implementation/rag_storage"
 if not os.path.exists(WORKING_DIR):
@@ -35,23 +43,21 @@ class RefinedQueries(BaseModel):
         description="Brief explanation of the thought process behind the refinement."
     )
 
-@dataclass
-class RAGDeps:
-    """Dependencies for the RAG agent."""
-    lightrag: LightRAG
-    refinement_llm: ChatOpenAI
-
 # Create the Pydantic AI agent
-agent = Agent(
+rag_agent = Agent(
     model,
-    deps_type=RAGDeps,
-    system_prompt="""You are a Retrieval Expert Agent operating over a LightRAG pipeline to answer user queries accurately.
+    deps_type=AgentDeps,
+    end_strategy='early',
+    model_settings={'parallel_tool_calls': False},
+    system_prompt="""You are an Enterprise Retrieval Expert Agent operating over a LightRAG pipeline to answer user queries accurately. 
+    The Knowledge Graph contains email data from a maritime corporation's internal and external communications.
 
     You have access to tools: retrieve, rephrase_and_refine_query 
-    If you need to use a tool, generate the tool call. Once the tool returns a result, summarize that result for the user.
+    You can use multiple tools in a single conversation turn.
 
+    OPERATIONAL RULES:
     1. Retrieval-first: For any information-seeking query, ensure retrieval is performed before answering.
-    2. Query refinement: Use `rephrase_and_refine_query` when the user query is ambiguous, incomplete, or overly broad.
+    2. Query refinement: Use `rephrase_and_refine_query` when the user query is ambiguous, incomplete, or overly broad and then use the refined queries to retrieve relevant documents. Use the tool instead of questioning the user for clarification.
     3. Tool usage: When a tool is required, generate the appropriate tool call and summarize the result for the user.
     4. Accuracy: If retrieval returns no results, clearly state that the information is not available in the graph.
     
@@ -59,13 +65,13 @@ agent = Agent(
 )
 
 
-@agent.tool
-async def retrieve(ctx: RunContext[RAGDeps], question: str) -> str:
+@rag_agent.tool
+async def retrieve(ctx: RunContext[AgentDeps], question: str) -> str:
     """
     Retrieve relevant documents from the RAG system based on the question.
 
     Args:
-        ctx (RunContext[RAGDeps]): The run context containing dependencies.
+        ctx (RunContext[AgentDeps]): The run context containing dependencies.
         question (str): The user's question to retrieve information for.
     
     Returns:
@@ -76,15 +82,15 @@ async def retrieve(ctx: RunContext[RAGDeps], question: str) -> str:
         param=QueryParam(mode="mix", enable_rerank=True, include_references=True)
     )
 
-@agent.tool
-async def rephrase_and_refine_query(ctx: RunContext[RAGDeps], user_query: str) -> RefinedQueries:
+@rag_agent.tool
+async def rephrase_and_refine_query(ctx: RunContext[AgentDeps], user_query: str) -> RefinedQueries:
     """
     Analyzes a conversational user query and generates 1-3 optimized, specific, 
     and concise search queries that will maximize retrieval accuracy from the email Knowledge Graph. 
     Use this ONLY when the user's query is complex or ambiguous.
 
     Args:
-        ctx: The run context containing dependencies (LLM).
+        ctx (RunContext[AgentDeps]): The run context containing dependencies (LLM).
         user_query: The conversational query from the user.
 
     Returns:
@@ -115,43 +121,55 @@ async def rephrase_and_refine_query(ctx: RunContext[RAGDeps], user_query: str) -
             reasoning=f"Technical failure during async refinement: {str(e)}"
         )
 
-async def run_rag_agent(question: str) -> str:
-    """Run the RAG agent to answer a question about Pydantic AI.
-    
-    Args:
-        question: The question to answer.
-        
-    Returns:
-        The agent's response.
-    """
-    # Create dependencies
-    lightrag = await initialize_rag()
+async def run_interactive_loop():
+    """Starts a continuous chat session with the KG Agent."""
+    # 1. Initialize dependencies once at the start
+    lightrag = await initialize_rag(working_dir=WORKING_DIR)
     ref_llm = ChatOpenAI(
             temperature=0.2, 
             model=os.getenv("LLM_MODEL", "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8"), 
             base_url=os.getenv("LLM_BINDING_HOST"), 
             api_key=os.getenv("LLM_BINDING_API_KEY")
         )
-    deps = RAGDeps(lightrag=lightrag, refinement_llm=ref_llm)
+    deps = AgentDeps(lightrag=lightrag, refinement_llm=ref_llm)
     
-    # Run the agent
-    result = await agent.run(question, deps=deps)
+    # 2. Maintain message history for memory
+    message_history = []
     
-    return result.output
+    print("\n--- RAG Agent Interactive Session (Type 'exit' to quit) ---")
 
-def main():
-    """Main function to parse arguments and run the RAG agent."""
-    parser = argparse.ArgumentParser(description="This script queries the PydanticAI agent with a user question.")
-    parser.add_argument("--question", default="Who is Sofia Stafylaraki?", help="The question to answer")
+    while True:
+        # 3. Get user input
+        user_input = input("\nUser: ").strip()
+        print("\n")
+        
+        if user_input.lower() in ["exit", "quit", "stop", "bye"]:
+            # Ensure we call the close tool before exiting
+            await rag_agent.run("Close the pipeline and exit.", deps=deps, message_history=message_history)
+            print("Goodbye!")
+            break
 
-    args = parser.parse_args()
+        if not user_input:
+            continue
 
-    # Run the agent
-    response = asyncio.run(run_rag_agent(args.question))
+        try:
+            # 4. Run the agent with context
+            # Pass message_history so the agent remembers previous steps
+            result = await rag_agent.run(
+                user_input, 
+                deps=deps, 
+                message_history=message_history
+            )
+            
+            # 5. Update history and show response
+            message_history = result.all_messages()
+            print(f"\nAgent: {result.output}")
 
-    print("\nResponse:")
-    print(response)
-
+        except Exception as e:
+            print(f"\n[SYSTEM ERROR]: {e}")
 
 if __name__ == "__main__":
-    main()
+    try:
+        asyncio.run(run_interactive_loop())
+    except KeyboardInterrupt:
+        print("\nSession interrupted.")

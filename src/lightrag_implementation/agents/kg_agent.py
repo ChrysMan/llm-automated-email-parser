@@ -1,16 +1,24 @@
 import os, asyncio, shutil
-from dataclasses import dataclass
 from pydantic_ai import RunContext
 from pydantic_ai.agent import Agent
-from lightrag import LightRAG, QueryParam
 from langchain_neo4j import Neo4jGraph
 from lightrag_implementation.basic_operations import initialize_rag, index_data
+from lightrag_implementation.agents.agent_deps import AgentDeps
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
+from langsmith import traceable
 from dotenv import load_dotenv
-import argparse
+from utils.logging_config import LOGGER
 
 load_dotenv()
+
+langsmith_api_key = os.getenv("LANGSMITH_API_KEY")
+if langsmith_api_key:
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_ENDPOINT"]="https://api.smith.langchain.com"
+    os.environ["LANGSMITH_PROJECT"] = "kg_agent"
+else:
+    LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
 
 WORKING_DIR = "./lightrag_implementation/rag_storage"
 if not os.path.exists(WORKING_DIR):
@@ -24,34 +32,34 @@ model = OpenAIChatModel(
     )    
 )
 
-@dataclass
-class KGDeps:
-    """Dependencies for the KG agent."""
-    lightrag: LightRAG
-
 # Create the Pydantic AI agent
-agent = Agent(
+kg_agent = Agent(
     model,
-    deps_type=KgDeps,
+    deps_type=AgentDeps,
+    end_strategy='early',
+    model_settings={'parallel_tool_calls': False},
     system_prompt="""You are an Enterprise Email Intelligence Agent managing a LightRAG pipeline and Neo4j Knowledge Graph.
 
     You have access to tools: add_data, reinitialize_rag_storage, and close.
-    If you need to use a tool, generate the tool call. Once the tool returns a result, summarize that result for the user.
+    You can use multiple tools in a single conversation turn.
+    If you need to use a tool, generate the tool call. Once the tool returns a result, summarize that result for the user. 
 
     OPERATIONAL RULES:
     1. Data Integrity: Only use `add_data` when provided a directory path. Verify the existence of the directory before proceeding.
     2. Safety: `reinitialize_rag_storage` is destructive. Use ONLY if the user explicitly asks to "wipe," "reset," or "clear" the entire system.
     3. Finalization: You MUST call `close` when the user signals the end of a session (e.g., "exit", "stop", "bye") to ensure data is saved and connections are closed safely.
-    
+    4. Wait for a confirmation message from one tool before calling the next.
+
     TONE: Professional, secure."""
 )
-
-@agent.tool
-async def reinitialize_rag_storage(ctx: RunContext[KGDeps]) -> str:
+    
+@traceable
+@kg_agent.tool 
+async def reinitialize_rag_storage(ctx: RunContext[AgentDeps]) -> str:
     """Deletes all data in the RAG storage and Neo4j Graph, then creates the clean LightRAG working directory and reinitializes LightRAG.
     
     Args:
-        ctx (RunContext[KGDeps]): The run context containing dependencies.
+        ctx (RunContext[AgentDeps]): The run context containing dependencies.
 
     Returns:
         str: Confirmation message upon completion.
@@ -69,7 +77,7 @@ async def reinitialize_rag_storage(ctx: RunContext[KGDeps]) -> str:
     except Exception as e:
         return f"Error connecting to Neo4j: {e}"
 
-    working_dir = ctx.deps.lightrag.working_dir
+    working_dir = WORKING_DIR
     if os.path.exists(working_dir):
         try:
             shutil.rmtree(working_dir)
@@ -87,14 +95,15 @@ async def reinitialize_rag_storage(ctx: RunContext[KGDeps]) -> str:
     except Exception as e:
         return f"Error reinitializing LightRAG: {e}"
     
-    return "RAG storage has been cleared and LightRAG has been reinitialized."
+    return "RAG storage has been cleared and LightRAG instance has been reinitialized."
 
-@agent.tool
-async def add_data(ctx: RunContext[KGDeps], dir_path: str) -> str:
+@traceable
+@kg_agent.tool
+async def add_data(ctx: RunContext[AgentDeps], dir_path: str) -> str:
     """Adds data from the given file path into the RAG system.
     
     Args:
-        ctx (RunContext[KGDeps]): The run context containing dependencies.
+        ctx (RunContext[AgentDeps]): The run context containing dependencies.
         dir_path (str): The directory path containing data files to index.
 
     Returns:
@@ -104,13 +113,14 @@ async def add_data(ctx: RunContext[KGDeps], dir_path: str) -> str:
         return f"{dir_path} is not a valid directory."
     return await index_data(ctx.deps.lightrag, dir_path)
 
-@agent.tool
-async def close(ctx: RunContext[KGDeps]) -> str:
+@traceable
+@kg_agent.tool
+async def close(ctx: RunContext[AgentDeps]) -> str:
     """
     Safely finalize and close the LightRAG pipeline when instructed to "exit", "quit" or "stop"
 
     Args:
-        ctx (RunContext[KGDeps]): The run context containing dependencies.
+        ctx (RunContext[AgentDeps]): The run context containing dependencies.
 
     Returns:
         str: Confirmation message upon successful closing
@@ -129,38 +139,50 @@ async def close(ctx: RunContext[KGDeps]) -> str:
     
     except Exception as e:
         return f"Error while closing the RAG pipeline: {e}"
+
+async def run_interactive_loop():
+    """Starts a continuous chat session with the KG Agent."""
+    # 1. Initialize dependencies once at the start
+    lightrag = await initialize_rag(working_dir=WORKING_DIR)
+    deps = AgentDeps(lightrag=lightrag)
     
-async def run_rag_agent(question: str) -> str:
-    """Run the RAG agent to answer a question about Pydantic AI.
+    # 2. Maintain message history for memory
+    message_history = []
     
-    Args:
-        question: The question to answer.
+    print("\n--- KG Agent Interactive Session (Type 'exit' to quit) ---")
+
+    while True:
+        # 3. Get user input
+        user_input = input("\nUser: ").strip()
+        print("\n")
         
-    Returns:
-        The agent's response.
-    """
-    # Create dependencies
-    lightrag = await initialize_rag()
-    deps = KGDeps(lightrag=lightrag)
-    
-    # Run the agent
-    result = await agent.run(question, deps=deps)
-    
-    return result.output
+        if user_input.lower() in ["exit", "quit", "stop", "bye"]:
+            # Ensure we call the close tool before exiting
+            await kg_agent.run("Close the pipeline and exit.", deps=deps, message_history=message_history)
+            print("Goodbye!")
+            break
 
-def main():
-    """Main function to parse arguments and run the kg agent."""
-    parser = argparse.ArgumentParser(description="This script queries the PydanticAI agent with a user question.")
-    parser.add_argument("--question", default="Add data to the graph from the directory /home/chryssida/DATA_TUC-KRITI/SEA IMPORT/234107.", help="The question to answer")
+        if not user_input:
+            continue
 
-    args = parser.parse_args()
+        try:
+            # 4. Run the agent with context
+            # Pass message_history so the agent remembers previous steps
+            result = await kg_agent.run(
+                user_input, 
+                deps=deps, 
+                message_history=message_history
+            )
+            
+            # 5. Update history and show response
+            message_history = result.all_messages()
+            print(f"\nAgent: {result.output}")
 
-    # Run the agent
-    response = asyncio.run(run_rag_agent(args.question))
-
-    print("\nResponse:")
-    print(response)
-
+        except Exception as e:
+            print(f"\n[SYSTEM ERROR]: {e}")
 
 if __name__ == "__main__":
-    main()
+    try:
+        asyncio.run(run_interactive_loop())
+    except KeyboardInterrupt:
+        print("\nSession interrupted.")
