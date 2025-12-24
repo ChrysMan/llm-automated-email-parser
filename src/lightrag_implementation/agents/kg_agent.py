@@ -25,10 +25,10 @@ if not os.path.exists(WORKING_DIR):
     os.makedirs(WORKING_DIR)
 
 model = OpenAIChatModel(
-    os.getenv("LLM_MODEL", "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8"),
+    os.getenv("LLM_AGENT_MODEL", "cyankiwi/Ministral-3-8B-Reasoning-2512-AWQ-8bit"),
     provider = OpenAIProvider(
-        base_url=os.getenv("LLM_BINDING_HOST"), 
-        api_key=os.getenv("LLM_BINDING_API_KEY")
+        base_url=os.getenv("LLM_AGENT_BINDING_HOST"), 
+        api_key=os.getenv("LLM_AGENT_BINDING_API_KEY")
     )    
 )
 
@@ -36,7 +36,6 @@ model = OpenAIChatModel(
 kg_agent = Agent(
     model,
     deps_type=AgentDeps,
-    end_strategy='early',
     model_settings={'parallel_tool_calls': False},
     system_prompt="""You are an Enterprise Email Intelligence Agent managing a LightRAG pipeline and Neo4j Knowledge Graph.
 
@@ -46,17 +45,19 @@ kg_agent = Agent(
 
     OPERATIONAL RULES:
     1. Data Integrity: Only use `add_data` when provided a directory path. Verify the existence of the directory before proceeding.
-    2. Safety: `reinitialize_rag_storage` is destructive. Use ONLY if the user explicitly asks to "wipe," "reset," or "clear" the entire system.
-    3. Finalization: You MUST call `close` when the user signals the end of a session (e.g., "exit", "stop", "bye") to ensure data is saved and connections are closed safely.
+    2. Safety: `reinitialize_rag_storage` is destructive. Ask for confirmation before using it.
+    3. Finalization: You MUST call `close` when the user requests to close or finalize the system to ensure data is saved and connections are closed safely.
     4. Wait for a confirmation message from one tool before calling the next.
 
     TONE: Professional, secure."""
 )
-    
+
+
 @traceable
 @kg_agent.tool 
 async def reinitialize_rag_storage(ctx: RunContext[AgentDeps]) -> str:
     """Deletes all data in the RAG storage and Neo4j Graph, then creates the clean LightRAG working directory and reinitializes LightRAG.
+    Use this tool ONLY when the user explicitly requests to "wipe," "reset," or "clear" the entire system - it is a destructive operation.
     
     Args:
         ctx (RunContext[AgentDeps]): The run context containing dependencies.
@@ -84,14 +85,14 @@ async def reinitialize_rag_storage(ctx: RunContext[AgentDeps]) -> str:
         except Exception as e:
             return f"Error clearing RAG storage contents: {e}"
         
-    try:
-        os.makedirs(working_dir)
-    except Exception as e:
-        return f"Error recreating RAG storage directory: {e}"
+    # try:
+    #     os.makedirs(working_dir)
+    # except Exception as e:
+    #     return f"Error recreating RAG storage directory: {e}"
         
     try:
-        new_rag = await initialize_rag(working_dir=working_dir)
-        ctx.deps.lightrag = new_rag
+        ctx.deps.lightrag = None
+        ctx.deps.lightrag = await initialize_rag(working_dir=working_dir)
     except Exception as e:
         return f"Error reinitializing LightRAG: {e}"
     
@@ -117,7 +118,7 @@ async def add_data(ctx: RunContext[AgentDeps], dir_path: str) -> str:
 @kg_agent.tool
 async def close(ctx: RunContext[AgentDeps]) -> str:
     """
-    Safely finalize and close the LightRAG pipeline when instructed to "exit", "quit" or "stop"
+    Safely finalize and close the LightRAG pipeline when instructed to "exit", "quit", "close" or "stop".
 
     Args:
         ctx (RunContext[AgentDeps]): The run context containing dependencies.

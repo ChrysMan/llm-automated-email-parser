@@ -25,7 +25,8 @@ class LLMPredictor:
     def __init__(self):
         self.client = OpenAI(
             base_url=os.getenv("LLM_BINDING_HOST"),
-            api_key=os.getenv("LLM_BINDING_API_KEY")
+            api_key=os.getenv("LLM_BINDING_API_KEY"),
+            max_retries=3
         )
 
     @traceable
@@ -44,7 +45,7 @@ class LLMPredictor:
     def __call__(self, prompt_list: List[str])->List[dict]:
         preprocessed_emails = []
         
-        with ThreadPoolExecutor(max_workers=8) as executor:
+        with ThreadPoolExecutor(max_workers=6) as executor:
             generated_texts_iterator = list(executor.map(self.process_single_prompt, prompt_list))
 
             for generated_text in generated_texts_iterator:

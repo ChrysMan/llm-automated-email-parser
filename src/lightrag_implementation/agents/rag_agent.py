@@ -28,10 +28,10 @@ if not os.path.exists(WORKING_DIR):
     os.makedirs(WORKING_DIR)
 
 model = OpenAIChatModel(
-    os.getenv("LLM_MODEL", "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8"),
+    os.getenv("LLM_AGENT_MODEL", "cyankiwi/Ministral-3-8B-Reasoning-2512-AWQ-8bit"),
     provider = OpenAIProvider(
-        base_url=os.getenv("LLM_BINDING_HOST"), 
-        api_key=os.getenv("LLM_BINDING_API_KEY")
+        base_url=os.getenv("LLM_AGENT_BINDING_HOST"), 
+        api_key=os.getenv("LLM_AGENT_BINDING_API_KEY")
     )    
 )
 
@@ -47,13 +47,12 @@ class RefinedQueries(BaseModel):
 rag_agent = Agent(
     model,
     deps_type=AgentDeps,
-    end_strategy='early',
     model_settings={'parallel_tool_calls': False},
     system_prompt="""You are an Enterprise Retrieval Expert Agent operating over a LightRAG pipeline to answer user queries accurately. 
     The Knowledge Graph contains email data from a maritime corporation's internal and external communications.
 
     You have access to tools: retrieve, rephrase_and_refine_query 
-    You can use multiple tools in a single conversation turn.
+    From the provided tool list, you can use multiple tools in a single conversation turn.
 
     OPERATIONAL RULES:
     1. Retrieval-first: For any information-seeking query, ensure retrieval is performed before answering.

@@ -19,15 +19,21 @@ SETUP_CMD="source \$(conda info --base)/etc/profile.d/conda.sh && conda activate
 
 # 5. Pane 1 (Top): Launch Qwen
 # We send the setup command, press Enter (C-m), then send the vLLM command
-tmux select-pane -t $SESSION_NAME:0.0 -T "Qwen-LLM"
+tmux select-pane -t $SESSION_NAME:0.0 -T "Qwen14-LLM"
 tmux send-keys -t $SESSION_NAME:0.0 "$SETUP_CMD" C-m
-tmux send-keys -t $SESSION_NAME:0.0 "vllm serve Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8 --tensor-parallel-size 2 --gpu-memory-utilization 0.8 --port 8001 --dtype float16 --max-model-len 20000 --max-num-seqs 15 --enable-auto-tool-choice --tool-call-parser hermes --chat-template ./utils/tool_chat_template_hermes.jinja --enforce-eager" C-m
+tmux send-keys -t $SESSION_NAME:0.0 "vllm serve Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8 --tensor-parallel-size 2 --gpu-memory-utilization 0.8 --port 8001 --dtype float16 --max-model-len 16384 --max-num-seqs 10" C-m
 
 # 6. Create Pane 2 (Bottom): Launch Reranker
 tmux split-window -v -t $SESSION_NAME:0.0
 tmux select-pane -t $SESSION_NAME:0.1 -T "BGE-Reranker"
 tmux send-keys -t $SESSION_NAME:0.1 "$SETUP_CMD" C-m
-tmux send-keys -t $SESSION_NAME:0.1 "CUDA_VISIBLE_DEVICES=2 vllm serve BAAI/bge-reranker-v2-m3 --api-key dummy --port 8000 --dtype float16 --gpu-memory-utilization 0.40 --tensor-parallel-size 1" C-m
+tmux send-keys -t $SESSION_NAME:0.1 "CUDA_VISIBLE_DEVICES=2 vllm serve BAAI/bge-reranker-v2-m3 --api-key dummy --port 8000 --dtype float16 --gpu-memory-utilization 0.4 --tensor-parallel-size 1" C-m
 
-# 7. Attach to view the dashboard
+# 7. Create Pane 3 (Right): Launch Qwen3
+tmux split-window -h -t $SESSION_NAME:0.1
+tmux select-pane -t $SESSION_NAME:0.2 -T "Qwen3-LLM"
+tmux send-keys -t $SESSION_NAME:0.2 "$SETUP_CMD" C-m
+tmux send-keys -t $SESSION_NAME:0.2 "CUDA_VISIBLE_DEVICES=3 vllm serve Qwen/Qwen2.5-3B-Instruct --port 8002 --dtype float16 --gpu-memory-utilization 0.80 --tensor-parallel-size 1 --max-model-len=17000 --enable-auto-tool-choice --tool-call-parser hermes --chat-template ./utils/tool_chat_template_hermes.jinja" C-m
+
+# 8. Attach to view the dashboard
 tmux attach-session -t $SESSION_NAME

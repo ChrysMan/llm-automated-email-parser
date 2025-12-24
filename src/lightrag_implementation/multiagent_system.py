@@ -7,6 +7,7 @@ from langgraph_supervisor import create_supervisor
 from langgraph.graph import StateGraph, START, END
 from langchain.agents import create_agent
 from langchain.tools import tool
+from langgraph.checkpoint.memory import InMemorySaver
 
 from lightrag_implementation.basic_operations import initialize_rag
 from lightrag_implementation.agents.kg_agent import kg_agent
@@ -25,16 +26,16 @@ if os.getenv("LANGSMITH_API_KEY"):
 WORKING_DIR = "./lightrag_implementation/rag_storage"
 os.makedirs(WORKING_DIR, exist_ok=True)
 
-# --- State Definition ---
-class State(TypedDict):
-    messages: Annotated[List[BaseMessage], operator.add]
-    Deps: AgentDeps
+# # --- State Definition ---
+# class State(TypedDict):
+#     messages: Annotated[List[BaseMessage], operator.add]
+#     Deps: AgentDeps
 
 # --- Tool Definitions ---
 def create_tools(deps: AgentDeps):
     """
     This 'factory' function creates tools that have 
-    access to the 'deps' without them being in the State.
+    access to the 'deps'.
     """
     @tool
     async def kg_tool(query: str):
@@ -56,12 +57,14 @@ def create_tools(deps: AgentDeps):
 
 # --- Supervisor Setup ---
 supervisor_prompt = """You are a supervisor overseeing:
-1. kg_tool: Use this tool for reinitializing graph storage, adding data, or finalizing pipelines.
-2. rag_tool: Use this tool for retrieving information/answering questions from the system.
-3. execute_full_preprocessing: Use this tool to process email data from a directory.
+1. kg_tool: Use this tool for reinitializing graph storage, adding data to the graph, or finalizing pipelines.
+2. rag_tool: Use this tool for retrieving information/answering questions from the system and refining queries. If the user query is ambiguous, incomplete, or overly broad, use rag_tool to refine the query before retrieval.
+3. execute_full_preprocessing: Use this tool to preprocess email data from a directory.
 
 Reason over which agent or tool to call based on the user's request and call them appropriately. 
-You can call multiple agents/tools in a single turn. Always summarize the results for the user."""
+You can call multiple agents/tools in a single turn. Provide clear and detailed responses based on the outputs of the tools you invoke.
+Do not include the references of the documents in the final answer. 
+Be professional, helpful, and kind in your tone."""
 
 # Run the graph
 @traceable
@@ -69,7 +72,7 @@ async def run_supervisor():
     lightrag = await initialize_rag(working_dir=WORKING_DIR)
     ref_llm = ChatOpenAI(
         temperature=0.2, 
-        model=os.getenv("LLM_MODEL", "gpt-4o"), # Ensure your local provider is compatible with tool calling
+        model=os.getenv("LLM_MODEL", "gpt-4o"), 
         base_url=os.getenv("LLM_BINDING_HOST"), 
         api_key=os.getenv("LLM_BINDING_API_KEY")
     ) 
@@ -82,46 +85,54 @@ async def run_supervisor():
     supervisor_agent = create_agent(
         model=ChatOpenAI(
             temperature=0, 
-            model=os.getenv("LLM_MODEL", "gpt-4o"), # Ensure your local provider is compatible with tool calling
-            base_url=os.getenv("LLM_BINDING_HOST"), 
-            api_key=os.getenv("LLM_BINDING_API_KEY")
+            model=os.getenv("LLM_AGENT_MODEL", "gpt-4o"), 
+            base_url=os.getenv("LLM_AGENT_BINDING_HOST"), 
+            api_key=os.getenv("LLM_AGENT_BINDING_API_KEY"),
+            max_retries=3
         ),
         tools=tools,
         system_prompt=supervisor_prompt,
+        checkpointer=InMemorySaver()
     )
     
     print("\n--- Arian Email System Active (Type 'exit' to quit) ---")
     config = {"configurable": {"thread_id": "session_1"}}
 
     while True:
-        user_input = input("\nUser: ").strip()
+        user_input = input("\n[User]: ").strip()
         
-        # Check if user wants to exit
         is_exiting = user_input.lower() in ["exit", "quit", "stop", "bye"]
         
         if is_exiting:
             # Force a finalization message to the supervisor
             print("\n[System]: Finalizing LightRAG pipeline before exit...")
-            user_input = "Please finalize the lightrag pipeline and reinitialize storage if needed to save state."
+            user_input = "Please finalize the lightrag pipeline without reinitializing."
 
         inputs = {
             "messages": [HumanMessage(content=user_input)],
             "Deps": deps
         }
 
-        async for step in supervisor_agent.astream(inputs, config=config, stream_mode="updates"):
-            for node_name, update in step.items():
-                # if node_name == "supervisor":
-                #     continue
-                
-                if "messages" in update:
-                    for message in update.get("messages", []):
-                        print(f"\n--- Output from [{node_name}] ---")
-                        message.pretty_print()
+        try:
+            async for step in supervisor_agent.astream(inputs, config=config, stream_mode="updates"):
+                for node_name, update in step.items():
+                    if node_name == "supervisor":
+                        continue
+                    
+                    if "messages" in update:
+                        for message in update.get("messages", []):
+                            #print("\n[System]: ", message.content)
+                            print(f"\n--- Output from [{node_name}] ---\n{message.content}")
+                            #message.pretty_print()
+        except Exception as e:
+            print(f"[Error]: An error occurred - {e}")
+            continue
 
         if is_exiting:
             print("\n[System]: Pipeline finalized. Goodbye!")
             break
+
+    
 
 if __name__ == "__main__":
     try:

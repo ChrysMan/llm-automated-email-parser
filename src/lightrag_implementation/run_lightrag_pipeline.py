@@ -31,7 +31,7 @@ async def main(mode: str, data_path: str)-> None:
             toc = time()
             resp_async = await run_async_query(rag, q, mode)
             print("\n====== Query Result ======\n", resp_async)
-            LOGGER.info(f"Duration of answering: {toc} seconds\n")
+            LOGGER.info(f"Duration of answering: {time() - toc} seconds\n")
     except Exception as e:
         LOGGER.error(f"An error occured: {e}")
     finally:
