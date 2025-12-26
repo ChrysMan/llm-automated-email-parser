@@ -1,4 +1,4 @@
-import extract_msg, re
+import extract_msg, re, os
 import json
 import math
 from utils.logging_config import LOGGER
@@ -28,6 +28,12 @@ def read_json_file(filename:str) -> List[dict]:
     except Exception as e:
         LOGGER.error(f"Failed to read JSON file {filename}: {e}")
         return []
+    
+def find_file(filename, search_path):
+        for root, dirs, files in os.walk(search_path):
+            if filename in files:
+                return os.path.join(root, filename)
+        return None
 
 def extract_msg_file(file_path) -> str:
     """ Returns the contents of the msg in a text format """

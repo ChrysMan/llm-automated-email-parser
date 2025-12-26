@@ -1,7 +1,6 @@
-import os, asyncio, shutil
+import os, asyncio, json
 from pydantic_ai import RunContext
 from pydantic_ai.agent import Agent
-from langchain_neo4j import Neo4jGraph
 from lightrag_implementation.basic_operations import initialize_rag, index_data
 from lightrag_implementation.agents.agent_deps import AgentDeps
 from pydantic_ai.models.openai import OpenAIChatModel
@@ -9,6 +8,7 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from langsmith import traceable
 from dotenv import load_dotenv
 from utils.logging_config import LOGGER
+from utils.graph_utils import find_file, read_json_file 
 
 load_dotenv()
 
@@ -39,13 +39,13 @@ kg_agent = Agent(
     model_settings={'parallel_tool_calls': False},
     system_prompt="""You are an Enterprise Email Intelligence Agent managing a LightRAG pipeline and Neo4j Knowledge Graph.
 
-    You have access to tools: add_data, reinitialize_rag_storage, and close.
-    You can use multiple tools in a single conversation turn.
-    If you need to use a tool, generate the tool call. Once the tool returns a result, summarize that result for the user. 
+    You have access to tools: add_data, delete_rag_storage, and close.
+    Reason over which tool to call based on the user's request and call them appropriately. 
+    You can call multiple tools in a single turn sequencially until the question is answered. Provide clear and detailed responses based on the outputs of the tools you invoke.
 
     OPERATIONAL RULES:
     1. Data Integrity: Only use `add_data` when provided a directory path. Verify the existence of the directory before proceeding.
-    2. Safety: `reinitialize_rag_storage` is destructive. Ask for confirmation before using it.
+    2. Safety: `delete_rag_storage` is destructive. Ask for confirmation before using it.
     3. Finalization: You MUST call `close` when the user requests to close or finalize the system to ensure data is saved and connections are closed safely.
     4. Wait for a confirmation message from one tool before calling the next.
 
@@ -55,8 +55,8 @@ kg_agent = Agent(
 
 @traceable
 @kg_agent.tool 
-async def reinitialize_rag_storage(ctx: RunContext[AgentDeps]) -> str:
-    """Deletes all data in the RAG storage and Neo4j Graph, then creates the clean LightRAG working directory and reinitializes LightRAG.
+async def delete_rag_storage(ctx: RunContext[AgentDeps]) -> str:
+    """Deletes all data in the RAG storage and Neo4j Graph.
     Use this tool ONLY when the user explicitly requests to "wipe," "reset," or "clear" the entire system - it is a destructive operation.
     
     Args:
@@ -65,38 +65,27 @@ async def reinitialize_rag_storage(ctx: RunContext[AgentDeps]) -> str:
     Returns:
         str: Confirmation message upon completion.
     """
-    if ctx.deps.lightrag:
-          await ctx.deps.lightrag.finalize_storages()
-    try:
-        graph = Neo4jGraph(
-            url=os.getenv('NEO4J_URI'),
-            username=os.getenv('NEO4J_USERNAME'),
-            password=os.getenv('NEO4J_PASSWORD')
-        )
-        graph.query("MATCH (n) DETACH DELETE n")
-        graph.close()
-    except Exception as e:
-        return f"Error connecting to Neo4j: {e}"
 
-    working_dir = WORKING_DIR
-    if os.path.exists(working_dir):
-        try:
-            shutil.rmtree(working_dir)
-        except Exception as e:
-            return f"Error clearing RAG storage contents: {e}"
-        
-    # try:
-    #     os.makedirs(working_dir)
-    # except Exception as e:
-    #     return f"Error recreating RAG storage directory: {e}"
-        
-    try:
-        ctx.deps.lightrag = None
-        ctx.deps.lightrag = await initialize_rag(working_dir=working_dir)
-    except Exception as e:
-        return f"Error reinitializing LightRAG: {e}"
+    target_file = "kv_store_full_docs.json"
+    start_dir = "./"
+
+    file_path = find_file(target_file, start_dir)
+
+    if not file_path:
+        LOGGER.error(f"Could not find {target_file} in {start_dir} or its subdirectories.")
+        return
     
-    return "RAG storage has been cleared and LightRAG instance has been reinitialized."
+    if ctx.deps.lightrag:
+        try:
+            dicts = read_json_file(file_path)
+            id_list = [json.dumps(d) for d in dicts]
+            
+            for id in id_list:
+                await ctx.deps.lightrag.adelete_by_doc_id(id.replace('"', ''), True)
+        except Exception as e:
+            LOGGER.error(f"Error during deletion of documents: {e}")
+    
+    return "RAG storage has been cleared."
 
 @traceable
 @kg_agent.tool

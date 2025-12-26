@@ -10,17 +10,15 @@ from pydantic import SkipValidation
 #     """Dependencies for the agents."""
 #     lightrag: LightRAG
 #     refinement_llm: Optional[ChatOpenAI] = None
-
+@dataclass
 class LightRAGBox:
     """A simple container to hold the active LightRAG instance."""
-    def __init__(self, instance):
-        self.instance = instance
+    instance: LightRAG
 
 @dataclass
 class AgentDeps:
-    def __init__(self, rag_box: LightRAGBox, refinement_llm=None):
-        self.rag_box = rag_box
-        self.refinement_llm = refinement_llm
+    rag_box: LightRAGBox
+    refinement_llm: Optional[ChatOpenAI] = None
 
     @property
     def lightrag(self):

@@ -52,7 +52,8 @@ rag_agent = Agent(
     The Knowledge Graph contains email data from a maritime corporation's internal and external communications.
 
     You have access to tools: retrieve, rephrase_and_refine_query 
-    From the provided tool list, you can use multiple tools in a single conversation turn.
+    Reason over which tool to call based on the user's request and call them appropriately. 
+    You can call multiple tools in a single turn sequencially until the question is answered. Provide clear and detailed responses based on the outputs of the tools you invoke.
 
     OPERATIONAL RULES:
     1. Retrieval-first: For any information-seeking query, ensure retrieval is performed before answering.

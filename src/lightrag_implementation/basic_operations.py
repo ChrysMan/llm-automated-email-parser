@@ -22,7 +22,7 @@ rerunk_func = partial(
 )
 
 async def llm_model_func(
-    prompt, system_prompt=None, history_messages=[], keyword_extraction=False, **kwargs
+    prompt, system_prompt=None, history_messages=[], **kwargs
 ) -> str:
     return await openai_complete_if_cache(
         os.getenv("LLM_MODEL", "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8"),
@@ -71,6 +71,7 @@ async def index_data(rag: LightRAG, dir_path: str)-> str:
         return f"Error: {dir_path} is not a valid directory."
     elif os.path.isdir(dir_path) and not any(f.endswith("unique.json") for f in os.listdir(dir_path)):
         return f"Error: No 'unique.json' files found in {dir_path}. The .msg files must first be preprocessed."
+    
 
     for filename in os.listdir(dir_path):
             if filename.endswith("unique.json"):

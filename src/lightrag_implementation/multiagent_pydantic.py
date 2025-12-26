@@ -1,13 +1,9 @@
-import os, operator, asyncio
-from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
+import os, asyncio
 from langchain_openai import ChatOpenAI
-from typing import Annotated, List, TypedDict
 from pydantic_ai.agent import Agent
 from pydantic_ai import RunContext
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
-
-
 
 from lightrag_implementation.basic_operations import initialize_rag
 from lightrag_implementation.agents.kg_agent import kg_agent
@@ -40,7 +36,7 @@ supervisor_agent = Agent(
     retries=3,
     model_settings={'parallel_tool_calls': False},
     system_prompt="""You are a supervisor overseeing:
-1. kg_tool: Use this tool for reinitializing graph storage, adding data to the graph, or finalizing pipelines.
+1. kg_tool: Use this tool for deleting graph storage, adding data to the graph, or finalizing pipelines.
 2. rag_tool: Use this tool for retrieving information/answering questions from the system and refining queries. If the user query is ambiguous, incomplete, or overly broad, use rag_tool to refine the query before retrieval.
 3. execute_full_preprocessing: Use this tool to preprocess email data from a directory.
 
@@ -74,7 +70,9 @@ async def execute_full_preprocessing(ctx: RunContext[AgentDeps], directory_path:
     return result
 
 async def run_supervisor():
+
     lightrag = await initialize_rag(working_dir=WORKING_DIR)
+
     ref_llm = ChatOpenAI(
         temperature=0.2, 
         model=os.getenv("LLM_MODEL", "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8"), 
@@ -88,15 +86,20 @@ async def run_supervisor():
         rag_box=rag_box,
         refinement_llm=ref_llm
     )
+
+    message_history = []
+
     while True:
         user_input = input("\n[User]: ")
         is_exiting = user_input.lower() in ["exit", "quit", "stop", "bye"]
         if is_exiting:
             print("\n[System]: Finalizing LightRAG pipeline before exit...")
-            user_input = "Please finalize the lightrag pipeline without reinitializing."
+            user_input = "Please finalize the lightrag pipeline."
 
-        result = await supervisor_agent.run(user_input, deps=deps)
+        result = await supervisor_agent.run(user_input, deps=deps, message_history=message_history)
         print(f"\n[System]]: {result.output}")
+
+        message_history = result.all_messages()
 
         if is_exiting:
             print("\n[System]: Pipeline finalized. Goodbye!")
