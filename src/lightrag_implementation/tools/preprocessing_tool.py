@@ -7,13 +7,13 @@ from utils.prompts import cleaning_prompt,formatter_and_translator_prompt
 from utils.graph_utils import extract_msg_file, clean_data, split_email_thread
 from utils.logging_config import LOGGER
 
-@tool
+
 def execute_full_preprocessing(dir_path: str)-> str:
     """Use this tool to preprocess emails in the given directory and return a list of cleaned and unique email texts."""
     tic = time()
 
-    if not os.path.isdir(dir_path):
-        return f"{dir_path} is not a valid directory."
+    # if not os.path.isdir(dir_path):
+    #     return f"{dir_path} is not a valid directory."
     
     folder_name = os.path.basename(os.path.normpath(dir_path))
     

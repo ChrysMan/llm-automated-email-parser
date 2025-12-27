@@ -35,6 +35,12 @@ def find_file(filename, search_path):
                 return os.path.join(root, filename)
         return None
 
+def find_dir(dirname, search_path):
+    for root, dirs, files in os.walk(search_path):
+        if dirname in dirs:
+            return os.path.join(root, dirname)
+    return None
+
 def extract_msg_file(file_path) -> str:
     """ Returns the contents of the msg in a text format """
     LOGGER.info("Extracting msg...")

@@ -1,28 +1,44 @@
 import os, asyncio
+from langchain_openai import ChatOpenAI
 import streamlit as st
 import nest_asyncio
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart
 
-from basic_operations import initialize_rag
-from agents.rag_agent import agent, RAGDeps
-
+from lightrag_implementation.basic_operations import initialize_rag
+from lightrag_implementation.agents.agent_deps import AgentDeps, LightRAGBox
+from lightrag_implementation.multiagent_pydantic import supervisor_agent 
+from utils.graph_utils import find_dir
 from dotenv import load_dotenv
 
 nest_asyncio.apply()
 
 load_dotenv()
-WORKING_DIR = "./rag_storage"
-if not os.path.exists(WORKING_DIR):
-    os.makedirs(WORKING_DIR)
 
 
-def get_agent_deps() -> RAGDeps:
+def get_agent_deps() -> AgentDeps:
     """
     Creates a LightRAG instance
     And then uses that to create the Pydantic AI agent dependencies.
     """
-    rag = asyncio.run(initialize_rag(WORKING_DIR))
-    return RAGDeps(lightrag=rag)
+
+    WORKING_DIR = find_dir("rag_storage", "./")
+
+    if not os.path.exists(WORKING_DIR):
+        os.makedirs(WORKING_DIR)
+
+    #rag = asyncio.run(initialize_rag(WORKING_DIR))
+    loop = asyncio.get_event_loop()
+    lightrag = loop.run_until_complete(initialize_rag(WORKING_DIR))
+
+    rag_box = LightRAGBox(instance = lightrag)
+
+    ref_llm = ChatOpenAI(
+        temperature=0.2, 
+        model=os.getenv("LLM_MODEL", "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8"), 
+        base_url=os.getenv("LLM_BINDING_HOST"), 
+        api_key=os.getenv("LLM_BINDING_API_KEY")
+    )
+    return AgentDeps(rag_box=rag_box, refinement_llm=ref_llm)
 
 def display_message_part(part):
     """
@@ -40,7 +56,7 @@ def display_message_part(part):
             st.markdown(part.content)             
 
 async def run_agent_with_streaming(user_input):
-    async with agent.run_stream(
+    async with supervisor_agent.run_stream(
         user_input, deps=st.session_state.agent_deps, message_history=st.session_state.messages
     ) as result:
         async for message in result.stream_text(delta=True, debounce_by=None):  
@@ -57,26 +73,27 @@ async def run_agent_with_streaming(user_input):
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 def main():
-    st.title("LightRAG AI Agent")
+    st.title("Arian AI Agent")
 
 
     # Initialize chat history in session state if not present
     if "messages" not in st.session_state:
-        st.session_state.messages = [
-            ModelResponse(parts=[TextPart(content= """
-### 👋 Hi, I'm your **LightRAG AI Agent**!
+        st.session_state.messages = []
+#         st.session_state.messages = [
+#             ModelResponse(parts=[TextPart(content= """
+# ### 👋 Hi, I'm your **Arian AI Agent**!
 
-I can assist you with:
+# I can assist you with:
 
-- 🔍 **Information retrieval** — just ask a question  
-- ♻️ **Graph deletion & recreation** — say "recreate graph"  
-- 📥 **Data indexing** — provide the path to your *preprocessed* directory  
-- 📨 **Data preprocessing** — give me the path to your *.msg* files  
-- 🔚 **Exit / stop the agent** — say "exit", "quit", or "stop"
+# - 🔍 **Information retrieval** — just ask a question  
+# - ♻️ **Graph deletion** — say "delete graph"  
+# - 📥 **Data indexing** — provide the path to your *preprocessed* directory  
+# - 📨 **Data preprocessing** — give me the path to your *.msg* files  
+# - 🔚 **Exit / stop the agent** — say "exit", "quit", or "stop"
 
-How can I help you today?
-""")])
-    ] 
+# How can I help you today?
+# """)])
+#     ] 
         
     if "agent_deps" not in st.session_state:
         st.session_state.agent_deps = get_agent_deps()
@@ -102,22 +119,23 @@ How can I help you today?
             # Create a placeholder for the streaming text
             message_placeholder = st.empty()
             # full_response = ""
-            with st.spinner('Thinking...'):
-                response = agent.run_sync(user_input, deps=st.session_state.agent_deps, message_history=st.session_state.messages)
-                message_placeholder.markdown(response.output)
+            
             # # Properly consume the async generator with async for
-            # async def stream_reply():
-            #     async for delta in run_agent_with_streaming(user_input):
-            #         nonlocal full_response
-            #         full_response += delta
-            #         message_placeholder.markdown(full_response + "▌")
-
-            #     message_placeholder.markdown(full_response)
+            # generator = run_agent_with_streaming(user_input)
+            # async for message in generator:
+            #     full_response += message
+            #     message_placeholder.markdown(full_response + "▌")
             
             # # Final response without the cursor
             # message_placeholder.markdown(full_response)
+            
+            with st.spinner('Thinking...'):
+                response = supervisor_agent.run_sync(user_input, deps=st.session_state.agent_deps, message_history=st.session_state.messages)
+                message_placeholder.markdown(response.output)
 
-        #asyncio.run(stream_reply())
+            st.session_state.messages.extend(response.all_messages())
+            #st.rerun()
+            
 
 
 if __name__ == "__main__":

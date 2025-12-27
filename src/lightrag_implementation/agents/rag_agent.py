@@ -52,15 +52,15 @@ rag_agent = Agent(
     The Knowledge Graph contains email data from a maritime corporation's internal and external communications.
 
     You have access to tools: retrieve, rephrase_and_refine_query 
-    Reason over which tool to call based on the user's request and call them appropriately. 
-    You can call multiple tools in a single turn sequencially until the question is answered. Provide clear and detailed responses based on the outputs of the tools you invoke.
 
     OPERATIONAL RULES:
-    1. Retrieval-first: For any information-seeking query, ensure retrieval is performed before answering.
-    2. Query refinement: Use `rephrase_and_refine_query` when the user query is ambiguous, incomplete, or overly broad and then use the refined queries to retrieve relevant documents. Use the tool instead of questioning the user for clarification.
-    3. Tool usage: When a tool is required, generate the appropriate tool call and summarize the result for the user.
+    1. Retrieval-first: For any information-seeking query, ensure retrieval is performed from the knowledge graph before answering.
+    2. Query refinement: Use `rephrase_and_refine_query` when the user query is ambiguous, incomplete, complex, or overly broad and then use the refined queries to retrieve relevant documents from the knowledge graph. Use this tool instead of questioning the user for clarification.
+    3. Tool usage: Reason over which tool to call based on the user's request and call them appropriately. 
+    You can call multiple tools in a single turn sequencially until the question is answered.
     4. Accuracy: If retrieval returns no results, clearly state that the information is not available in the graph.
-    
+    5. Output: Provide clear and detailed responses based on the outputs of the tools you invoke.
+
     TONE: Professional, secure, and fact-based."""
 )
 
@@ -85,9 +85,9 @@ async def retrieve(ctx: RunContext[AgentDeps], question: str) -> str:
 @rag_agent.tool
 async def rephrase_and_refine_query(ctx: RunContext[AgentDeps], user_query: str) -> RefinedQueries:
     """
+    Use this ONLY when the user's query is complex, ambiguous, or overly simple.
     Analyzes a conversational user query and generates 1-3 optimized, specific, 
     and concise search queries that will maximize retrieval accuracy from the email Knowledge Graph. 
-    Use this ONLY when the user's query is complex or ambiguous.
 
     Args:
         ctx (RunContext[AgentDeps]): The run context containing dependencies (LLM).
@@ -101,15 +101,13 @@ async def rephrase_and_refine_query(ctx: RunContext[AgentDeps], user_query: str)
         template = f"""
         You are an expert Query Refinement Agent. Your task is to analyze the user's query
         about email data and generate 1 to 3 highly specific, concise queries that will maximize retrieval 
-        accuracy from a vector database.
+        accuracy from a knowledge graph .
 
         The queries should focus on key entities, dates, and topics found in the user's input.
         
         CONVERSATIONAL QUERY: {user_query}
         """
         
-        # Use the LLM from dependencies to get structured output
-        # Since we are in an async tool, we use ainvoke
         llm_with_structure = ctx.deps.refinement_llm.with_structured_output(RefinedQueries)
         
         result = await llm_with_structure.ainvoke(template)
