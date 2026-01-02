@@ -12,20 +12,3 @@ class AgentDeps:
     refinement_llm: Optional[ChatOpenAI] = None
     dir_path: Optional[str] = None
 
-@dataclass
-class LightRAGBox:
-    """A simple container to hold the active LightRAG instance."""
-    instance: LightRAG
-
-# @dataclass
-# class AgentDeps:
-#     rag_box: LightRAGBox
-#     refinement_llm: Optional[ChatOpenAI] = None
-
-#     @property
-#     def lightrag(self):
-#         return self.rag_box.instance
-    
-#     @lightrag.setter
-#     def lightrag(self, new_instance):
-#         self.rag_box.instance = new_instance

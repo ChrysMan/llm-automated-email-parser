@@ -11,9 +11,6 @@ from utils.logging_config import LOGGER
 def execute_full_preprocessing(dir_path: str)-> str:
     """Use this tool to preprocess emails in the given directory and return a list of cleaned and unique email texts."""
     tic = time()
-
-    # if not os.path.isdir(dir_path):
-    #     return f"{dir_path} is not a valid directory."
     
     folder_name = os.path.basename(os.path.normpath(dir_path))
     
@@ -30,7 +27,7 @@ def execute_full_preprocessing(dir_path: str)-> str:
                 raw_msg_content = extract_msg_file(file_path)
                 cleaned_msg_content = clean_data(raw_msg_content)
                 all_emails_to_process.extend(split_email_thread(cleaned_msg_content))
-
+                LOGGER.info(f"Extraction completed successfully")
             except Exception as e:
                 LOGGER.error(f"Failed to extract or clean email from {filename}: {e}")
                 continue
@@ -45,23 +42,29 @@ def execute_full_preprocessing(dir_path: str)-> str:
     results = predictor(cleaning_prompts)
 
     # ---------------Deduplicate results---------------
-    unique_emails = deduplicate_emails(results)
-    emails_json = []
-    for text in unique_emails:
-            # Split at the first "body:" (case-insensitive, multi-line safe)
-            parts = re.split(r'(?mi)^\s*body\s*:\s*', text, maxsplit=1)
-            headers_part = parts[0]
-            body_part = parts[1] if len(parts) == 2 else ""
+    try:
+        unique_emails = deduplicate_emails(results)
+        emails_json = []
+        for text in unique_emails:
+                # Split at the first "body:" (case-insensitive, multi-line safe)
+                parts = re.split(r'(?mi)^\s*body\s*:\s*', text, maxsplit=1)
+                headers_part = parts[0]
+                body_part = parts[1] if len(parts) == 2 else ""
 
-            email_dict = {}
-            for line in headers_part.splitlines():
-                if ":" in line:
-                    key, val = line.split(":", 1)  # split only on first colon
-                    email_dict[key.strip().lower()] = val.strip()
+                email_dict = {}
+                for line in headers_part.splitlines():
+                    if ":" in line:
+                        key, val = line.split(":", 1)  # split only on first colon
+                        email_dict[key.strip().lower()] = val.strip()
 
-            email_dict["body"] = body_part.rstrip()
-            emails_json.append(email_dict)
-    with open(output_path, "w", encoding="utf-8") as file:
-        json.dump(emails_json, file, indent=4, ensure_ascii=False, default=str)
+                email_dict["body"] = body_part.rstrip()
+                emails_json.append(email_dict)
+        with open(output_path, "w", encoding="utf-8") as file:
+            json.dump(emails_json, file, indent=4, ensure_ascii=False, default=str)
 
-    return f"The preprocessing has completed in {time() - tic} seconds and the output is saved at {output_path}."
+        LOGGER.info(f"Deduplication completed successfully")
+        return f"The preprocessing has completed in {time() - tic} seconds and the output is saved at {output_path}."
+    except Exception as e:
+        LOGGER.error(f"Error during deduplication or saving: {e}")
+        return "An error occurred during deduplication or saving."
+   

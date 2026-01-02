@@ -1,16 +1,14 @@
 import os, asyncio
-from dataclasses import dataclass
 from typing import List
 from pydantic import BaseModel, Field
 from pydantic_ai import RunContext
 from pydantic_ai.agent import Agent
 from lightrag import QueryParam
-from lightrag_implementation.basic_operations import initialize_rag
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.openai import OpenAIProvider
-from langchain_openai import ChatOpenAI
-from lightrag_implementation.agents.agent_deps import AgentDeps
 from dotenv import load_dotenv
+
+from lightrag_implementation.basic_operations import initialize_rag
+from lightrag_implementation.llm import ref_llm, agent_llm
+from lightrag_implementation.agents.agent_deps import AgentDeps
 from utils.logging_config import LOGGER
 
 load_dotenv()
@@ -27,14 +25,6 @@ WORKING_DIR = "./lightrag_implementation/rag_storage"
 if not os.path.exists(WORKING_DIR):
     os.makedirs(WORKING_DIR)
 
-model = OpenAIChatModel(
-    os.getenv("LLM_AGENT_MODEL", "cyankiwi/Ministral-3-8B-Reasoning-2512-AWQ-8bit"),
-    provider = OpenAIProvider(
-        base_url=os.getenv("LLM_AGENT_BINDING_HOST"), 
-        api_key=os.getenv("LLM_AGENT_BINDING_API_KEY")
-    )    
-)
-
 class RefinedQueries(BaseModel):
     refined_queries: List[str] = Field(
         description="A list of 1 to 3 highly specific, optimal search queries."
@@ -45,8 +35,9 @@ class RefinedQueries(BaseModel):
 
 # Create the Pydantic AI agent
 rag_agent = Agent(
-    model,
+    agent_llm,
     deps_type=AgentDeps,
+    retries=3,
     model_settings={'parallel_tool_calls': False},
     system_prompt="""You are an Enterprise Retrieval Expert Agent operating over a LightRAG pipeline to answer user queries accurately. 
     The Knowledge Graph contains email data from a maritime corporation's internal and external communications.
@@ -97,7 +88,6 @@ async def rephrase_and_refine_query(ctx: RunContext[AgentDeps], user_query: str)
         RefinedQueries: A Pydantic model containing the list of refined queries and reasoning.
     """
     try:
-        # Define the local prompt
         template = f"""
         You are an expert Query Refinement Agent. Your task is to analyze the user's query
         about email data and generate 1 to 3 highly specific, concise queries that will maximize retrieval 
@@ -121,28 +111,19 @@ async def rephrase_and_refine_query(ctx: RunContext[AgentDeps], user_query: str)
 
 async def run_interactive_loop():
     """Starts a continuous chat session with the KG Agent."""
-    # 1. Initialize dependencies once at the start
     lightrag = await initialize_rag(working_dir=WORKING_DIR)
-    ref_llm = ChatOpenAI(
-            temperature=0.2, 
-            model=os.getenv("LLM_MODEL", "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8"), 
-            base_url=os.getenv("LLM_BINDING_HOST"), 
-            api_key=os.getenv("LLM_BINDING_API_KEY")
-        )
+
     deps = AgentDeps(lightrag=lightrag, refinement_llm=ref_llm)
-    
-    # 2. Maintain message history for memory
+
     message_history = []
     
     print("\n--- RAG Agent Interactive Session (Type 'exit' to quit) ---")
 
     while True:
-        # 3. Get user input
         user_input = input("\nUser: ").strip()
         print("\n")
         
         if user_input.lower() in ["exit", "quit", "stop", "bye"]:
-            # Ensure we call the close tool before exiting
             await rag_agent.run("Close the pipeline and exit.", deps=deps, message_history=message_history)
             print("Goodbye!")
             break
@@ -151,15 +132,12 @@ async def run_interactive_loop():
             continue
 
         try:
-            # 4. Run the agent with context
-            # Pass message_history so the agent remembers previous steps
             result = await rag_agent.run(
                 user_input, 
                 deps=deps, 
                 message_history=message_history
             )
             
-            # 5. Update history and show response
             message_history = result.all_messages()
             print(f"\nAgent: {result.output}")
 

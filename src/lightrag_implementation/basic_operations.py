@@ -1,38 +1,16 @@
-import os, pdfplumber, json
+import os, json
 from time import time
-from utils.graph_utils import read_json_file
 from lightrag.lightrag import LightRAG, QueryParam
-from functools import partial
-from lightrag.rerank import generic_rerank_api
-from lightrag.llm.ollama import ollama_model_complete, ollama_embed
-from lightrag.llm.hf import hf_model_complete
-from lightrag.llm.openai import openai_complete, openai_complete_if_cache
+from lightrag.llm.ollama import ollama_embed
 from lightrag.utils import EmbeddingFunc
 from lightrag.kg.shared_storage import initialize_share_data, initialize_pipeline_status
+
+from utils.graph_utils import read_json_file
+from lightrag_implementation.llm import llm_model_func, rerunk_func
 
 WORKING_DIR = "./lightrag_implementation/rag_storage"
 if not os.path.exists(WORKING_DIR):
     os.makedirs(WORKING_DIR)
-
-rerunk_func = partial(
-    generic_rerank_api, 
-    model=os.getenv("RERANK_MODEL"),
-    base_url=os.getenv("RERANK_BINDING_HOST"),
-    api_key=os.getenv("RERANK_BINDING_API_KEY")
-)
-
-async def llm_model_func(
-    prompt, system_prompt=None, history_messages=[], **kwargs
-) -> str:
-    return await openai_complete_if_cache(
-        os.getenv("LLM_MODEL", "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8"),
-        prompt,
-        system_prompt=system_prompt,
-        history_messages=history_messages,
-        api_key=os.getenv("LLM_BINDING_API_KEY") or os.getenv("OPENAI_API_KEY"),
-        base_url=os.getenv("LLM_BINDING_HOST"),
-        **kwargs,
-    )
 
 async def initialize_rag(working_dir: str = WORKING_DIR) -> LightRAG:
 
@@ -105,7 +83,6 @@ async def run_async_query(rag: LightRAG, question: str, mode: str, top_k: int = 
     return await rag.aquery(
         query=question,
         param=QueryParam(mode=mode, enable_rerank=True, include_references=True) #top_k=top_k,
-        #system_prompt="You are a helpful assistant that provides accurate and concise information. Answer the user's question based on the retrieved documents."
-    )
+       )
 
         

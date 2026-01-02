@@ -4,9 +4,8 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 from pydantic_ai.agent import Agent
 from pydantic_ai import RunContext
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.openai import OpenAIProvider
 
+from lightrag_implementation.llm import agent_llm, ref_llm
 from lightrag_implementation.basic_operations import initialize_rag
 from lightrag_implementation.agents.kg_agent import kg_agent
 from lightrag_implementation.agents.rag_agent import rag_agent
@@ -17,8 +16,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# --- Configuration ---
-
 if os.getenv("LANGSMITH_API_KEY"):
     os.environ["LANGCHAIN_TRACING_V2"] = "true"
     os.environ["LANGCHAIN_PROJECT"] = "supervisor_agent"
@@ -27,16 +24,8 @@ WORKING_DIR = find_dir("rag_storage", "./")
 os.makedirs(WORKING_DIR, exist_ok=True)
 
 def create_supervisor_agent()-> Agent:
-    model = OpenAIChatModel(
-        os.getenv("LLM_AGENT_MODEL", "cyankiwi/Ministral-3-8B-Reasoning-2512-AWQ-8bit"),
-        provider = OpenAIProvider(
-            base_url=os.getenv("LLM_AGENT_BINDING_HOST"), 
-            api_key=os.getenv("LLM_AGENT_BINDING_API_KEY")
-        )    
-    )
-
     supervisor_agent = Agent(
-        model,
+        agent_llm,
         deps_type=AgentDeps,
         retries=3,
         model_settings={'parallel_tool_calls': False, 'tool_call_order': ['split_complex_query']},
@@ -46,25 +35,25 @@ def create_supervisor_agent()-> Agent:
     1. split_complex_query: Use this tool when a user request contains more than one action or instruction in order to break it down into separate, atomic tasks.
     2. kg_tool: Use this tool for deleting graph storage, adding data to the graph, or finalizing pipelines.
     3. rag_tool: Use this tool for retrieving information/answering questions from the knowledge graph and refining queries. If the user query is ambiguous, incomplete, or overly broad, use rag_tool to refine the query before retrieval.
-    4. preprocess_emails: Use this tool to preprocess .msg files containing email threads from a given directory. If the directory isn't provided, ask for it.
+    4. preprocess_emails: Use this tool to preprocess .msg files containing email threads from a given directory. If the directory isn't provided, ask for it. Use ONLY when asked to preprocess email data. Don't use it when asked to add data to the graph.
 
     IMPORTANT: 
     1. Only finalize the RAG pipeline when the user explicitly requests it (e.g., 'finalize the pipeline', 'close', 'exit' etc.).
     2. If the user provides multiple instructions you MUST first call `split_complex_query` to split it into atomic steps. You must then sequentially call the appropriate tools for each atomic step.
-    3. Do not attempt to execute multiple steps in one tool call.
+    3. When asked to add data assume that the data has already been preprocessed.
+    4. When asked to preprocess emails and then add them to the graph, first call `preprocess_emails` and once it is complete, call `kg_tool` to add the preprocessed data to the graph using the same directory.
     
     Rules:
-    1. Reason over which agent or tool to call based on the user's request and call them appropriately. 
-    2. Execute all queries strictly one after the other. Do not start a tool until the previous tool has completed.
-    3. You can call multiple agents/tools in a single turn. Provide clear and detailed responses based on the outputs of the tools you invoke.
-    4. Do not include the references of the documents in the final answer. 
-    5. Be professional, helpful, and kind in your tone."""
+    1. Strategic Routing: Select the appropriate agent or tool based on the user request.
+    2. Strict Sequentiality: Execute tools one at a time. Do not initiate a new tool until the previous one has fully responded.
+    3. Multi-Step Reasoning: Call multiple tools within a single turn if necessary, but compile the final response only after all operations are complete.
+    4. Clean Output: Provide professional, detailed answers based on tool results, but strictly exclude all document references or citations."""
     )
 
     @supervisor_agent.tool
     async def kg_tool(ctx: RunContext[AgentDeps], query: str) -> str:
         """
-        Use this tool to interact with the KG agent for tasks like reinitializing graph storage, adding data, or finalizing pipelines.
+        Use this tool to interact with the KG agent for tasks like deleting graph storage, adding data from a directory, or finalizing pipelines.
         """
         result = await kg_agent.run(query, deps=ctx.deps)
         return result.output
@@ -90,6 +79,10 @@ def create_supervisor_agent()-> Agent:
 
         if not os.path.isdir(dir_path):
             return f"{dir_path} is not a valid directory."
+        elif not any(fname.endswith('.msg') for fname in os.listdir(dir_path)):
+            return f"No .msg files found in the directory {dir_path}."
+        elif any(fname.endswith('unique.json') for fname in os.listdir(dir_path)):
+            return f"Email preprocessing has already been completed for the directory {dir_path}."
         else:
             result = execute_full_preprocessing(dir_path = dir_path)
             return result
@@ -122,19 +115,10 @@ def create_supervisor_agent()-> Agent:
 
 async def run_supervisor():
 
-    lightrag = await initialize_rag(working_dir=WORKING_DIR)
-
-    ref_llm = ChatOpenAI(
-        temperature=0.2, 
-        model=os.getenv("LLM_MODEL", "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8"), 
-        base_url=os.getenv("LLM_BINDING_HOST"), 
-        api_key=os.getenv("LLM_BINDING_API_KEY")
-    )
-
-    rag_box = LightRAGBox(instance=lightrag)
+    rag = await initialize_rag(working_dir=WORKING_DIR)
 
     deps = AgentDeps(
-        rag_box=rag_box,
+        lightrag=rag,
         refinement_llm=ref_llm
     )
 

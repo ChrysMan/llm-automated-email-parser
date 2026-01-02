@@ -1,9 +1,9 @@
 import os
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
 
+from lightrag_implementation.llm import ref_llm
 from lightrag_implementation.basic_operations import initialize_rag
 from lightrag_implementation.agents.agent_deps import AgentDeps
 from lightrag_implementation.agents.supervisor import create_supervisor_agent
@@ -22,18 +22,10 @@ class ChatInput(BaseModel):
 
 class ChatOutput(BaseModel):
     response: str
-    all_messages: list
 
 @app.on_event("startup")
 async def startup_event():
     rag = await initialize_rag(working_dir=WORKING_DIR)
-
-    ref_llm = ChatOpenAI(
-        temperature=0.2,
-        model=os.getenv("LLM_MODEL"),
-        base_url=os.getenv("LLM_BINDING_HOST"),
-        api_key=os.getenv("LLM_BINDING_API_KEY"),
-    )
 
     app.state.rag = rag
 
@@ -60,10 +52,7 @@ async def chat_endpoint(chat_input: ChatInput):
             message_history=chat_input.message_history,
         )
 
-        return ChatOutput(
-            response=result.output,
-            all_messages=result.all_messages(),
-        )
+        return ChatOutput(response=result.output)
 
     except Exception as ex:
         raise HTTPException(status_code=500, detail=str(ex))
