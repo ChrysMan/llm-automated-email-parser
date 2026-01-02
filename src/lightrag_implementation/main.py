@@ -1,53 +1,79 @@
-import os, sys, asyncio
-from time import time
-from src.utils.logging_config import LOGGER
-from basic_operations import initialize_rag, index_data, run_async_query
+import os
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
 
+from lightrag_implementation.basic_operations import initialize_rag
+from lightrag_implementation.agents.agent_deps import AgentDeps
+from lightrag_implementation.agents.supervisor import create_supervisor_agent
+from utils.graph_utils import find_dir
+
 load_dotenv()
-"""
-1. Initialize RAG system
-2. Index data from specified directory
-3. Run async queries against the RAG system
-"""
 
-async def main(mode: str, data_path: str)-> None:
-    tic = time()
+WORKING_DIR = find_dir("rag_storage", "./")
+os.makedirs(WORKING_DIR, exist_ok=True)
+
+app = FastAPI()
+
+class ChatInput(BaseModel):
+    message: str
+    message_history: list | None = None
+
+class ChatOutput(BaseModel):
+    response: str
+    all_messages: list
+
+@app.on_event("startup")
+async def startup_event():
+    rag = await initialize_rag(working_dir=WORKING_DIR)
+
+    ref_llm = ChatOpenAI(
+        temperature=0.2,
+        model=os.getenv("LLM_MODEL"),
+        base_url=os.getenv("LLM_BINDING_HOST"),
+        api_key=os.getenv("LLM_BINDING_API_KEY"),
+    )
+
+    app.state.rag = rag
+
+    app.state.deps = AgentDeps(
+        lightrag=rag,
+        refinement_llm=ref_llm,
+        dir_path=None
+    )
+
+    app.state.supervisor_agent = create_supervisor_agent()
+
+@app.post("/chat", response_model=ChatOutput)
+async def chat_endpoint(chat_input: ChatInput):
+    deps = getattr(app.state, "deps", None)
+    supervisor_agent = getattr(app.state, "supervisor_agent", None)
     
-    DOCS_PATH = data_path
-    rag = None
+    if deps is None:
+        raise HTTPException(status_code=503, detail="System not initialized")
+
     try:
-        rag = await initialize_rag()
-        result_message = await index_data(rag, DOCS_PATH)
-        if "Error" in result_message:
-            LOGGER.error(result_message)
-            return
-        else:
-            LOGGER.info(result_message)
+        result = await supervisor_agent.run(
+            chat_input.message,
+            deps=deps,
+            message_history=chat_input.message_history,
+        )
 
-        LOGGER.info(f"Total time taken: {time() - tic} seconds")
+        return ChatOutput(
+            response=result.output,
+            all_messages=result.all_messages(),
+        )
 
-        while (q :=input("> ")) != "exit":
-            toc = time()
-            resp_async = await run_async_query(rag, q, mode)
-            print("\n====== Query Result ======\n", resp_async)
-            LOGGER.info(f"Duration of answering: {toc} seconds\n")
-    except Exception as e:
-        LOGGER.error(f"An error occured: {e}")
-    finally:
-        if rag:
-            await rag.finalize_storages()
+    except Exception as ex:
+        raise HTTPException(status_code=500, detail=str(ex))
 
+@app.get("/health")
+async def health():
+    rag = getattr(app.state, "rag", None)
+    session_alive = getattr(rag, "session", None) is not None
+    return {"rag_session_alive": session_alive}
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        LOGGER.error("Usage: python create_kg.py <dir_path>")
-        sys.exit(1)
-
-    dir_path = sys.argv[1]
-
-    if not os.path.isdir(dir_path):
-        LOGGER.error(f"{dir_path} is not a valid dir.")
-        sys.exit(1)
-
-    asyncio.run(main(data_path=dir_path, mode="mix"))
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8080, reload=True)

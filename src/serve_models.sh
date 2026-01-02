@@ -27,7 +27,7 @@ tmux send-keys -t $SESSION_NAME:0.0 "vllm serve Qwen/Qwen2.5-14B-Instruct-GPTQ-I
 tmux split-window -v -t $SESSION_NAME:0.0
 tmux select-pane -t $SESSION_NAME:0.1 -T "BGE-Reranker"
 tmux send-keys -t $SESSION_NAME:0.1 "$SETUP_CMD" C-m
-tmux send-keys -t $SESSION_NAME:0.1 "CUDA_VISIBLE_DEVICES=2 vllm serve BAAI/bge-reranker-v2-m3 --api-key dummy --port 8000 --dtype float16 --gpu-memory-utilization 0.4 --tensor-parallel-size 1" C-m
+tmux send-keys -t $SESSION_NAME:0.1 "CUDA_VISIBLE_DEVICES=2 vllm serve BAAI/bge-reranker-v2-m3 --api-key dummy --port 8003 --dtype float16 --gpu-memory-utilization 0.4 --tensor-parallel-size 1" C-m
 
 # 7. Create Pane 3 (Right): Launch Qwen3
 tmux split-window -h -t $SESSION_NAME:0.1
