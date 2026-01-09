@@ -1,9 +1,13 @@
+import os
 import streamlit as st
 import requests
+from dotenv import load_dotenv
 
-FASTAPI_URL = "http://localhost:8080/chat/"
+load_dotenv()
 
-MAX_HISTORY_LENGTH = 20
+FASTAPI_URL = os.getenv("LIGHTRAG_API_URL")
+
+MAX_HISTORY_LENGTH = 10
 
 def trim_message_history(messages):
     """Trim message history to prevent memory issues in long conversations."""

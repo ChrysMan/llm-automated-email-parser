@@ -1,5 +1,6 @@
 import os, json
 from time import time
+from functools import partial
 from lightrag.lightrag import LightRAG, QueryParam
 from lightrag.llm.ollama import ollama_embed
 from lightrag.utils import EmbeddingFunc
@@ -25,11 +26,12 @@ async def initialize_rag(working_dir: str = WORKING_DIR) -> LightRAG:
         rerank_model_func=rerunk_func,
         min_rerank_score=0.3,
         embedding_func=EmbeddingFunc(
-            embedding_dim=768,
+            embedding_dim=1024,
             max_token_size=8192,
-            func=lambda texts: ollama_embed(
-                texts, embed_model="nomic-embed-text", host="http://localhost:11434"
-                )
+            func=partial(ollama_embed.func, embed_model="bge-m3:latest", host="http://localhost:11434") # Need to pull it first
+            # func=lambda texts: ollama_embed(
+            #     texts, embed_model="nomic-embed-text", host="http://localhost:11434"
+            #     )
         )
     )
 

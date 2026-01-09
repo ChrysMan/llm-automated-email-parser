@@ -21,7 +21,7 @@ SETUP_CMD="source \$(conda info --base)/etc/profile.d/conda.sh && conda activate
 # We send the setup command, press Enter (C-m), then send the vLLM command
 tmux select-pane -t $SESSION_NAME:0.0 -T "Qwen14-LLM"
 tmux send-keys -t $SESSION_NAME:0.0 "$SETUP_CMD" C-m
-tmux send-keys -t $SESSION_NAME:0.0 "vllm serve Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8 --tensor-parallel-size 2 --gpu-memory-utilization 0.8 --port 8001 --dtype float16 --max-model-len 16384 --max-num-seqs 10" C-m
+tmux send-keys -t $SESSION_NAME:0.0 "vllm serve Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8 --tensor-parallel-size 2 --gpu-memory-utilization 0.8 --port 8001 --dtype float16 --max-model-len 22000 --max-num-seqs 10" C-m
 
 # 6. Create Pane 2 (Bottom): Launch Reranker
 tmux split-window -v -t $SESSION_NAME:0.0

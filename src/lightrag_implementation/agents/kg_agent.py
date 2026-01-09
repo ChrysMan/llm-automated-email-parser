@@ -3,6 +3,7 @@ from pydantic_ai import RunContext
 from pydantic_ai.agent import Agent
 from langsmith import traceable
 from dotenv import load_dotenv
+from lightrag.tools.clean_llm_query_cache import CleanupTool
 
 from lightrag_implementation.basic_operations import initialize_rag, index_data
 from lightrag_implementation.agents.agent_deps import AgentDeps
@@ -84,6 +85,9 @@ async def delete_rag_storage(ctx: RunContext[AgentDeps]) -> str:
                 for entity_name in entity_chunks:
                     await ctx.deps.lightrag.adelete_by_entity(entity_name.replace('"', ''))
 
+            #Clean up LLM query cache
+            ct = CleanupTool(ctx.deps.lightrag)
+            ct.run()
         except Exception as e:
             LOGGER.error(f"Error during deletion of documents: {e}")
     

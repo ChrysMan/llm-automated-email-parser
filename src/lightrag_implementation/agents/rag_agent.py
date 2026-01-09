@@ -70,7 +70,8 @@ async def retrieve(ctx: RunContext[AgentDeps], question: str) -> str:
     """
     return await ctx.deps.lightrag.aquery(
         query=question,
-        param=QueryParam(mode="mix", enable_rerank=True, include_references=False)
+        param=QueryParam(mode="mix", enable_rerank=True, include_references=False),
+        #system_prompt="""Project Integrity Rule: Every entity is bound to a specific Project Reference Number found in its file_path (e.g., '244036') and in the description. When answering a query about a specific project, you must filter the retrieved entities by this reference number."""
     )
 
 @rag_agent.tool
