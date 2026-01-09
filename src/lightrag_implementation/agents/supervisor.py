@@ -9,7 +9,7 @@ from lightrag_implementation.llm import agent_llm, ref_llm
 from lightrag_implementation.basic_operations import initialize_rag
 from lightrag_implementation.agents.kg_agent import kg_agent
 from lightrag_implementation.agents.rag_agent import rag_agent
-from lightrag_implementation.agents.agent_deps import AgentDeps, LightRAGBox
+from lightrag_implementation.agents.agent_deps import AgentDeps
 from lightrag_implementation.tools.preprocessing_tool import execute_full_preprocessing
 from utils.graph_utils import find_dir
 from dotenv import load_dotenv

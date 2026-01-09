@@ -49,7 +49,7 @@ rag_agent = Agent(
     2. Query refinement: Use `rephrase_and_refine_query` when the user query is ambiguous, incomplete, complex, or overly broad and then use the refined queries to retrieve relevant documents from the knowledge graph. Use this tool instead of questioning the user for clarification.
     3. Tool usage: Reason over which tool to call based on the user's request and call them appropriately. 
     You can call multiple tools in a single turn sequencially until the question is answered.
-    4. Accuracy: If retrieval returns no results, clearly state that the information is not available in the graph.
+    4. Accuracy: Answer only information relevant to the question asked. If retrieval returns no results, clearly state that the information is not available in the graph.
     5. Output: Provide clear and detailed responses based on the outputs of the tools you invoke.
 
     TONE: Professional, secure, and fact-based."""
@@ -70,7 +70,7 @@ async def retrieve(ctx: RunContext[AgentDeps], question: str) -> str:
     """
     return await ctx.deps.lightrag.aquery(
         query=question,
-        param=QueryParam(mode="mix", enable_rerank=True, include_references=True)
+        param=QueryParam(mode="mix", enable_rerank=True, include_references=False)
     )
 
 @rag_agent.tool

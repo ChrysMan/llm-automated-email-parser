@@ -23,15 +23,14 @@ async def initialize_rag(working_dir: str = WORKING_DIR) -> LightRAG:
         #llm_model_kwargs={"host": "http://localhost:11434", "options": {"num_ctx": 32768}},
         vector_storage="FaissVectorDBStorage",
         rerank_model_func=rerunk_func,
-        min_rerank_score=0.4,
+        min_rerank_score=0.3,
         embedding_func=EmbeddingFunc(
             embedding_dim=768,
             max_token_size=8192,
             func=lambda texts: ollama_embed(
                 texts, embed_model="nomic-embed-text", host="http://localhost:11434"
                 )
-        ),
-        enable_llm_cache=False
+        )
     )
 
     # Initialize database connections
@@ -78,11 +77,12 @@ async def index_data(rag: LightRAG, dir_path: str)-> str:
 
 async def run_async_query(rag: LightRAG, question: str, mode: str, top_k: int = 5) -> str:
     """
-    Execute an async RAG query using .aquery method
+    Execute an async RAG query using .aquery method 
     """
     return await rag.aquery(
         query=question,
-        param=QueryParam(mode=mode, enable_rerank=True, include_references=True) #top_k=top_k,
+        param=QueryParam(mode=mode, enable_rerank=True, include_references=True), #top_k=top_k,
+        #system_prompt="""Project Integrity Rule: Every entity is bound to a specific Project Reference Number found in its file_path (e.g., '244036'). When answering a query about a specific project, you must filter the retrieved entities by this reference number."""
        )
 
         
