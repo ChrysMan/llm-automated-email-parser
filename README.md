@@ -91,7 +91,7 @@ python email_preprocessing_agent /path/to/your/data/directory
 #### First approach: RAG on Vector Database
 ```sh
 # Create a vector database from a deduplicated email list
-python create_vectorDB_spaCyfaiss.py /path/to/your/data/file
+python create_vectorDB_model.py /path/to/your/data/file
 # Run Retrieval-Augmented Generation (RAG) on the vector database
 python rag_embedDB.py
 ```
