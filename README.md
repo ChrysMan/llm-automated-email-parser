@@ -62,9 +62,6 @@ ollama pull llama3.1
 ./serving/serve_models.sh
 ```
 
-##### Note: 
-*/path/to/your/data/directory should be replaced with the actual path where your `.msg` files are stored.*
-
 #### First approach: RAG on Vector Database
 ```sh
 cd src
@@ -86,6 +83,9 @@ python -m vectorDB_impl.create_kg /path/to/your/data/directory
 # Run the bot with an agent implementing RAG on the knowledge graph
 python -m streamlit run vectorDB_impl.bot  
 ```
+
+##### Note: 
+*/path/to/your/data/directory should be replaced with the actual path where your `.msg` files are stored.*
 
 #### Third approach: GraphRAG on Knowledge Graph using [LightRAG](https://github.com/HKUDS/LightRAG)
 This is the final implementation chosen for the project, integrating the multi-agent system with the Streamlit interface and FastAPI backend.
