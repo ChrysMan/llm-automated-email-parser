@@ -6,8 +6,8 @@ from time import time
 from email import message_from_string
 from typing import List
 
-from lightrag_impl.utils.logging import LOGGER
-from lightrag_impl.utils.email_utils import extract_msg_file, clean_data, split_email_thread
+from utils.logging import LOGGER
+from utils.email_utils import extract_msg_file, clean_data, split_email_thread
 from lightrag_impl.prompts.preprocessing_prompts import cleaning_prompt, formatter_and_translator_prompt
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "3"

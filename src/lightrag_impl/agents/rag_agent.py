@@ -6,11 +6,11 @@ from pydantic_ai.agent import Agent
 from lightrag import QueryParam
 from dotenv import load_dotenv
 
-from lightrag_impl.core.pipeline import initialize_rag
-from lightrag_impl.core.llm import ref_llm, agent_llm
-from lightrag_impl.agents.dependencies import AgentDeps
-from lightrag_impl.utils.logging import LOGGER
-from lightrag_impl.utils.file_io import find_dir
+from ..core.pipeline import initialize_rag
+from ..core.llm import ref_llm, agent_llm
+from ..agents.dependencies import AgentDeps
+from utils.logging import LOGGER
+from utils.file_io import find_dir
 
 load_dotenv()
 

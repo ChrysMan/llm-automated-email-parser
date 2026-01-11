@@ -1,11 +1,11 @@
 import os, json, re
 from time import time
 
-from lightrag_impl.preprocessing.vllm_predictor import LLMPredictor
-from lightrag_impl.preprocessing.deduplicate import deduplicate_emails
-from lightrag_impl.prompts.preprocessing_prompts import cleaning_prompt,formatter_and_translator_prompt
-from lightrag_impl.utils.email_utils import extract_msg_file, clean_data, split_email_thread
-from lightrag_impl.utils.logging import LOGGER
+from ..preprocessing.vllm_predictor import LLMPredictor
+from ..preprocessing.deduplicate import deduplicate_emails
+from ..prompts.preprocessing_prompts import cleaning_prompt,formatter_and_translator_prompt
+from utils.email_utils import extract_msg_file, clean_data, split_email_thread
+from utils.logging import LOGGER
 
 
 def execute_full_preprocessing(dir_path: str)-> str:

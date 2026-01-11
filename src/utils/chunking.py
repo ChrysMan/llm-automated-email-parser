@@ -1,5 +1,5 @@
 import math
-from ..utils.logging import LOGGER
+from .logging import LOGGER
 from typing import List, Tuple
 
 def find_best_chunk_size(total_emails, min_chunk, max_chunk):

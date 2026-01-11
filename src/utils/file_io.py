@@ -1,6 +1,6 @@
 import os
 import json
-from ..utils.logging import LOGGER
+from .logging import LOGGER
 from typing import List
 
 def write_file(content, filename):

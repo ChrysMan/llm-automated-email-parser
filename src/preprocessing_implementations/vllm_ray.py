@@ -12,10 +12,10 @@ from typing import Optional, List, Dict, Tuple
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
-from lightrag_impl.utils.logging import LOGGER
-from lightrag_impl.utils.chunking import smart_chunker
-from lightrag_impl.utils.email_utils import extract_msg_file, clean_data, split_email_thread
-from lightrag_impl.utils.file_io import append_file
+from utils.logging import LOGGER
+from utils.chunking import smart_chunker
+from utils.email_utils import extract_msg_file, clean_data, split_email_thread
+from utils.file_io import append_file
 
 assert Version(ray.__version__) >= Version(
     "2.22.0"), "Ray version must be at least 2.22.0"

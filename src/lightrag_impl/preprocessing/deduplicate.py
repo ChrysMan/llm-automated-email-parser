@@ -5,8 +5,9 @@ from typing import List
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings.spacy_embeddings import SpacyEmbeddings
 from langchain_community.docstore.in_memory import InMemoryDocstore
-from lightrag_impl.utils.logging import LOGGER
-from lightrag_impl.utils.file_io import read_json_file, write_file
+
+from utils.logging import LOGGER
+from utils.file_io import read_json_file, write_file
 
 FAISS_DB_PATH = "/home/chryssida/src/faiss_db.index"
 

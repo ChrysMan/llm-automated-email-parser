@@ -6,8 +6,9 @@ from lightrag.llm.ollama import ollama_embed
 from lightrag.utils import EmbeddingFunc
 from lightrag.kg.shared_storage import initialize_share_data, initialize_pipeline_status
 
-from lightrag_impl.utils.file_io import find_dir, read_json_file
-from lightrag_impl.core.llm import llm_model_func, rerunk_func
+from ..core.llm import llm_model_func, rerunk_func
+from utils.file_io import find_dir, read_json_file
+
 
 WORKING_DIR = find_dir("rag_storage", "./")
 os.makedirs(WORKING_DIR, exist_ok=True)

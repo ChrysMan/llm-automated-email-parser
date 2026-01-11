@@ -3,8 +3,8 @@ import numpy as np
 from time import time
 from sentence_transformers import SentenceTransformer
 
-from lightrag_impl.utils.file_io import read_json_file, write_file
-from lightrag_impl.utils.logging import LOGGER
+from utils.file_io import read_json_file, write_file
+from utils.logging import LOGGER
 
 tic = time()
 

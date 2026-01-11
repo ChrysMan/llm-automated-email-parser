@@ -6,11 +6,9 @@ from email import message_from_string
 from langchain_core.output_parsers import JsonOutputParser
 from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig
 
-from lightrag_impl.prompts.preprocessing_prompts import EmailInfo
-from lightrag_impl.utils.email_utils import extract_msg_file, clean_data, split_email_thread
-from lightrag_impl.utils.email_utils import clean_data
-from lightrag_impl.prompts.preprocessing_prompts import overall_cleaning_prompt
-from lightrag_impl.utils.logging import LOGGER
+from lightrag_impl.prompts.preprocessing_prompts import EmailInfo, overall_cleaning_prompt
+from utils.email_utils import extract_msg_file, clean_data, split_email_thread
+from utils.logging import LOGGER
 
 from dotenv import load_dotenv
 

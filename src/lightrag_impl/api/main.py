@@ -3,11 +3,11 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-from lightrag_impl.core.llm import ref_llm
-from lightrag_impl.core.pipeline import initialize_rag
-from lightrag_impl.agents.dependencies import AgentDeps
-from lightrag_impl.agents.supervisor import create_supervisor_agent
-from lightrag_impl.utils.file_io import find_dir
+from ..core.llm import ref_llm
+from ..core.pipeline import initialize_rag
+from ..agents.dependencies import AgentDeps
+from ..agents.supervisor import create_supervisor_agent
+from utils.file_io import find_dir
 
 load_dotenv()
 

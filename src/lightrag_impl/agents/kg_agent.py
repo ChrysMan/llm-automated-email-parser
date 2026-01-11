@@ -5,11 +5,11 @@ from langsmith import traceable
 from dotenv import load_dotenv
 from lightrag.tools.clean_llm_query_cache import CleanupTool
 
-from lightrag_impl.core.pipeline import initialize_rag, index_data
-from lightrag_impl.agents.dependencies import AgentDeps
-from lightrag_impl.core.llm import agent_llm
-from lightrag_impl.utils.logging import LOGGER
-from lightrag_impl.utils.file_io import find_file, read_json_file, find_dir 
+from ..core.pipeline import initialize_rag, index_data
+from ..agents.dependencies import AgentDeps
+from ..core.llm import agent_llm
+from utils.logging import LOGGER
+from utils.file_io import find_file, read_json_file, find_dir 
 
 load_dotenv()
 

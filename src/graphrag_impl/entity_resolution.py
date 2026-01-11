@@ -4,8 +4,8 @@ from langchain_neo4j import Neo4jVector
 from pydantic import BaseModel, Field
 from tqdm import tqdm
 from graphdatascience import GraphDataScience
-from graphrag_impl.llm import dedup_llm, embedding_provider
-from graphrag_impl.graph import graph
+from .llm import dedup_llm, embedding_provider
+from .graph import graph
 from langchain_core.prompts import ChatPromptTemplate
 from concurrent.futures import ThreadPoolExecutor, as_completed
 

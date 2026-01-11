@@ -1,5 +1,5 @@
 import extract_msg, re
-from ..utils.logging import LOGGER
+from .logging import LOGGER
 
 def extract_msg_file(file_path) -> str:
     """ Returns the contents of the msg in a text format """

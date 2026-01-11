@@ -5,13 +5,13 @@ from pydantic import BaseModel, Field
 from pydantic_ai.agent import Agent
 from pydantic_ai import RunContext
 
-from lightrag_impl.core.llm import agent_llm, ref_llm
-from lightrag_impl.core.pipeline import initialize_rag
-from lightrag_impl.agents.kg_agent import kg_agent
-from lightrag_impl.agents.rag_agent import rag_agent
-from lightrag_impl.agents.dependencies import AgentDeps
-from lightrag_impl.tools.preprocessing_tool import execute_full_preprocessing
-from lightrag_impl.utils.file_io import find_dir
+from ..core.llm import agent_llm, ref_llm
+from ..core.pipeline import initialize_rag
+from ..agents.kg_agent import kg_agent
+from ..agents.rag_agent import rag_agent
+from ..agents.dependencies import AgentDeps
+from ..tools.preprocessing_tool import execute_full_preprocessing
+from utils.file_io import find_dir
 from dotenv import load_dotenv
 
 load_dotenv()
