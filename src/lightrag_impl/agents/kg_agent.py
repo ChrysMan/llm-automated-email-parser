@@ -13,8 +13,7 @@ from utils.file_io import find_file, read_json_file, find_dir
 
 load_dotenv()
 
-langsmith_api_key = os.getenv("LANGSMITH_API_KEY")
-if langsmith_api_key:
+if os.getenv("LANGSMITH_API_KEY"):
     os.environ["LANGCHAIN_TRACING_V2"] = "true"
     os.environ["LANGCHAIN_ENDPOINT"]="https://api.smith.langchain.com"
     os.environ["LANGSMITH_PROJECT"] = "kg_agent"

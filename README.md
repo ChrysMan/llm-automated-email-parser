@@ -8,9 +8,10 @@ It presents a high-performance Multi-Agent System (MAS) that converts unstructur
 - Python 3.12 installed
 - `ollama` installed ([Installation Guide](https://ollama.ai/))
 - `.msg` email files available for processing
-- LangSmith api key 
-- Huggingface api key
-- Neo4j Server
+- [LangSmith](https://docs.langchain.com/langsmith/create-account-api-key#api-keys) api key 
+- [Huggingface](https://huggingface.co/settings/tokens) api key
+- Neo4j server running (Docker-based setup)
+- 4 gpus with VRAM >= 16GB and compute capability >= 7
 
 ## Getting Started:
 
@@ -61,8 +62,12 @@ ollama pull llama3.1
 ./serving/serve_models.sh
 ```
 
+##### Note: 
+*/path/to/your/data/directory should be replaced with the actual path where your `.msg` files are stored.*
+
 #### First approach: RAG on Vector Database
 ```sh
+cd src
 # Preprocess the raw email data
 python -m preprocessing_implementations.vllm_serve /path/to/your/data/directory   
 # Create a vector database from a deduplicated email list
@@ -73,6 +78,7 @@ python rag_embedDB.py
 
 #### Second approach: GraphRAG on Knowledge Graph
 ```sh
+cd src
 # Preprocess the raw email data
 python -m preprocessing_implementations.vllm_serve /path/to/your/data/directory   
 # Create Neo4j knowledge graph from emails
@@ -91,5 +97,3 @@ uvicorn src.api.main:app --reload --port 8080
 python -m streamlit run ui/streamlit_ui.py
 ```
 
-#### Note: 
-/path/to/your/data/directory should be replaced with the actual path where your `.msg` files are stored.

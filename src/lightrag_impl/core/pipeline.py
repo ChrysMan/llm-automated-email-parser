@@ -84,7 +84,6 @@ async def run_async_query(rag: LightRAG, question: str, mode: str, top_k: int = 
     return await rag.aquery(
         query=question,
         param=QueryParam(mode=mode, enable_rerank=True, include_references=True), #top_k=top_k,
-        #system_prompt="""Project Integrity Rule: Every entity is bound to a specific Project Reference Number found in its file_path (e.g., '244036'). When answering a query about a specific project, you must filter the retrieved entities by this reference number."""
-       )
+    )
 
         
