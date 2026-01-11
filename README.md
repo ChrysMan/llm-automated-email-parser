@@ -20,44 +20,30 @@ Run the following command in your project's root directory:
 #### For Linux/macOS: 
 ```sh
 python3 -m venv myvenv  
-```
-or
-```sh
-conda create -n myvenv python=3.12 -y
-```
-#### For Windows: 
-```sh
-python -m venv myvenv   
-```
-or
-```sh
-conda create -n myvenv python=3.12 -y
-```
-
-### Activate the Virtual Environment:
-#### For Linux/macOS: 
-```sh
 source myvenv/bin/activate 
 ```
 or
 ```sh
+conda create -n myvenv python=3.12 -y
 conda activate myvenv
 ```
-#### For Windows (Command Prompt): 
+#### For Windows: 
 ```sh
+python -m venv myvenv   
 myvenv\Scripts\activate 
 ```
 or
 ```sh
+conda create -n myvenv python=3.12 -y
 conda activate myvenv
 ```
 
-### Clone the repository:
+### Clone the Repository:
 ```sh
 git clone https://github.com/ChrysMan/llm-automated-email-parser.git
 ```
 
-### Install dependencies:
+### Install Dependencies:
 ```sh
 pip install -r requirements.txt
 ```
@@ -68,7 +54,7 @@ Before running the program, download the required model (or any model you wish t
 ollama pull llama3.1
 ```
 
-### Execute program:
+### Execute Program:
 
 #### Serve the required models using vLLM
 ```sh
