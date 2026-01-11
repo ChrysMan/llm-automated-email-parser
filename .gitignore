@@ -5,3 +5,10 @@ test.py
 graph_test.ipynb
 environment.yml
 *.env
+*.index
+vllm_ray_ordered.py
+faiss_db.index/
+nx_graph_creation/
+Texts/
+lightrag.log
+testing_scripts/

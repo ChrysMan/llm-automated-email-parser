@@ -1,6 +1,8 @@
-# Automating Information Extraction from Emails using Large Language Models
+# RAG Multi-Agent System: Enterprise Email Information Extraction
 
-*This project is still in progress* 
+This repository contains the implementation of my thesis, **"Automating Information Extraction from Emails using Large Language Models"**.
+It presents a high-performance Multi-Agent System (MAS) that converts unstructured enterprise email workflows into structured, queryable knowledge. The system combines **retrieval-augmented generation (RAG)** pipelines with a **supervisor-agent architecture**, coordinating multiple specialized agents for efficient and scalable processing. It is deployed via **FastAPI** and features a **Streamlit-based chatbot interface**, allowing users to interactively generate and query knowledge graphs extracted from their email workflows.
+
 
 ## Prerequisites
 - Python 3.12 installed
@@ -10,10 +12,7 @@
 - Huggingface api key
 - Neo4j Server
 
-
-
-
-## Setup & Execution:
+## Getting Started:
 
 ### Create a Virtual Environment:
 Run the following command in your project's root directory:
@@ -52,67 +51,58 @@ or
 ```sh
 conda activate myvenv
 ```
-### Install Dependencies:
+
+### Clone the repository:
+```sh
+git clone https://github.com/ChrysMan/llm-automated-email-parser.git
+```
+
+### Install dependencies:
 ```sh
 pip install -r requirements.txt
 ```
 
 ### Download the LLM Model
 Before running the program, download the required model (or any model you wish to use):
-```
-ollama pull llama3.1
-```
-
-### Navigate to correct directory
 ```sh
-cd src
+ollama pull llama3.1
 ```
 
 ### Execute program:
 
-#### Different approaches for preprocessing the emails 
+#### Serve the required models using vLLM
 ```sh
-# Synchronous model inference (serial execution)
-python email_preprocessing_sync.py /path/to/your/data/directory   
-``` 
-```sh
-# Asynchronous model inference                                
-python email_preprocessing_async.py /path/to/your/data/directory  
+./serving/serve_models.sh
 ```
-```sh        
-# Distributed model inference using vllm                         
-python email_preprocessing_vllm_unordered.py /path/to/your/data/directory    
-```
-```sh
-# Distributed model inference using accelerate with distinct prompts 
-# (will be transformed into an agent later)
-python email_preprocessing_agent /path/to/your/data/directory
-```
+
 #### First approach: RAG on Vector Database
 ```sh
+# Preprocess the raw email data
+python -m preprocessing_implementations.vllm_serve /path/to/your/data/directory   
 # Create a vector database from a deduplicated email list
 python create_vectorDB_model.py /path/to/your/data/file
 # Run Retrieval-Augmented Generation (RAG) on the vector database
 python rag_embedDB.py
 ```
+
 #### Second approach: GraphRAG on Knowledge Graph
 ```sh
+# Preprocess the raw email data
+python -m preprocessing_implementations.vllm_serve /path/to/your/data/directory   
 # Create Neo4j knowledge graph from emails
-python create_kg.py /path/to/your/data/directory
+python -m vectorDB_impl.create_kg /path/to/your/data/directory
 # Run the bot with an agent implementing RAG on the knowledge graph
-streamlit run bot.py  
+python -m streamlit run vectorDB_impl.bot  
 ```
 
-#### Third approach: GraphRAG on Knowledge Graph using LightRAG (best approach)
+#### Third approach: GraphRAG on Knowledge Graph using [LightRAG](https://github.com/HKUDS/LightRAG)
+This is the final implementation chosen for the project, integrating the multi-agent system with the Streamlit interface and FastAPI backend.
 ```sh
-# Serve the models using vLLM
-./serve_models.sh
-
+cd src
 # In a second terminal serve the multi-agent system's api
-uvicorn lightrag_implementation.main:app --reload --port 8080
-
+uvicorn src.api.main:app --reload --port 8080
 # In a third terminal run the streamlit ui
-python -m streamlit run lightrag_implementation/streamlit_ui.py
+python -m streamlit run ui/streamlit_ui.py
 ```
 
 #### Note: 
