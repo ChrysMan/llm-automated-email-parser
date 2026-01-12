@@ -3,6 +3,8 @@
 This repository contains the implementation of my thesis, **"Automating Information Extraction from Emails using Large Language Models"**.
 It presents a high-performance Multi-Agent System (MAS) that converts unstructured enterprise email workflows into structured, queryable knowledge. The system combines **retrieval-augmented generation (RAG)** pipelines with a **supervisor-agent architecture**, coordinating multiple specialized agents for efficient and scalable processing. It is deployed via **FastAPI** and features a **Streamlit-based chatbot interface**, allowing users to interactively generate and query knowledge graphs extracted from their email workflows.
 
+## System Architecture
+<img src="docs/images/system_architecture.png" alt="System Architecture" width="900"/>
 
 ## Prerequisites
 - Python 3.12 installed
