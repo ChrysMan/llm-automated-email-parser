@@ -96,8 +96,8 @@ This is the final implementation chosen for the project, integrating the multi-a
 ```sh
 cd src
 # In a second terminal serve the multi-agent system's api
-uvicorn lightrag_imp.api.main:app --reload --port 8080
+uvicorn lightrag_impl.api.main:app --reload --port 8080
 # In a third terminal run the streamlit ui
-python -m streamlit run lightrag_imp/ui/streamlit_ui.py
+python -m streamlit run lightrag_impl/ui/streamlit_ui.py
 ```
 
