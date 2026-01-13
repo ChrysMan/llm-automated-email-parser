@@ -72,9 +72,9 @@ cd src
 # Preprocess the raw email data
 python -m preprocessing_implementations.vllm_serve /path/to/your/data/directory   
 # Create a vector database from a deduplicated email list
-python create_vectorDB_model.py /path/to/your/data/file
+python -m vectorDB_impl.create_vectorDB_model.py /path/to/your/data/file
 # Run Retrieval-Augmented Generation (RAG) on the vector database
-python rag_embedDB.py
+python -m vectorDB_impl.rag_embedDB.py
 ```
 
 #### Second approach: GraphRAG on Knowledge Graph
@@ -83,9 +83,9 @@ cd src
 # Preprocess the raw email data
 python -m preprocessing_implementations.vllm_serve /path/to/your/data/directory   
 # Create Neo4j knowledge graph from emails
-python -m vectorDB_impl.create_kg /path/to/your/data/directory
+python -m graphrag_impl.vectorDB_impl.create_kg /path/to/your/data/directory
 # Run the bot with an agent implementing RAG on the knowledge graph
-python -m streamlit run vectorDB_impl.bot  
+python -m streamlit run graphrag_impl..bot  
 ```
 
 ##### Note: 
@@ -96,8 +96,8 @@ This is the final implementation chosen for the project, integrating the multi-a
 ```sh
 cd src
 # In a second terminal serve the multi-agent system's api
-uvicorn src.api.main:app --reload --port 8080
+uvicorn lightrag_impl.api.main:app --reload --port 8080
 # In a third terminal run the streamlit ui
-python -m streamlit run ui/streamlit_ui.py
+python -m streamlit run lightrag_impl/ui/streamlit_ui.py
 ```
 
