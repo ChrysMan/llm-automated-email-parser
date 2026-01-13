@@ -14,11 +14,9 @@ tmux set -g pane-border-status top
 tmux set -g pane-border-format " [ #T ] " # Shows the title you set
 
 # 4. Define the activation and environment setup
-# Use 'source' to ensure conda is initialized correctly in the subshell
 SETUP_CMD="source \$(conda info --base)/etc/profile.d/conda.sh && conda activate $CONDA_ENV && export NCCL_P2P_DISABLE=1 NCCL_IB_DISABLE=1 NCCL_SOCKET_IFNAME=lo"
 
 # 5. Pane 1 (Top): Launch Qwen
-# We send the setup command, press Enter (C-m), then send the vLLM command
 tmux select-pane -t $SESSION_NAME:0.0 -T "Qwen14-LLM"
 tmux send-keys -t $SESSION_NAME:0.0 "$SETUP_CMD" C-m
 tmux send-keys -t $SESSION_NAME:0.0 "vllm serve Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8 --tensor-parallel-size 2 --gpu-memory-utilization 0.8 --port 8001 --dtype float16 --max-model-len 22000 --max-num-seqs 10" C-m
