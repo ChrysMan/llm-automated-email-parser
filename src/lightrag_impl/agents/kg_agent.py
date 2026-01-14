@@ -9,7 +9,7 @@ from ..core.pipeline import initialize_rag, index_data
 from ..agents.dependencies import AgentDeps
 from ..core.llm import agent_llm
 from utils.logging import LOGGER
-from utils.file_io import find_file, read_json_file, find_dir 
+from utils.file_io import find_file, read_json_file
 
 load_dotenv()
 
@@ -20,8 +20,7 @@ if os.getenv("LANGSMITH_API_KEY"):
 else:
     LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
 
-WORKING_DIR = find_dir("rag_storage", "./")
-os.makedirs(WORKING_DIR, exist_ok=True)
+WORKING_DIR = "lightrag_impl/core/rag_storage"
 
 kg_agent = Agent(
     agent_llm,
@@ -81,9 +80,9 @@ async def delete_rag_storage(ctx: RunContext[AgentDeps]) -> str:
                 for entity_name in entity_chunks:
                     await ctx.deps.lightrag.adelete_by_entity(entity_name.replace('"', ''))
 
-            #Clean up LLM query cache
-            ct = CleanupTool(ctx.deps.lightrag)
-            ct.run()
+            # ct = CleanupTool()
+            # await ct.run()
+
         except Exception as e:
             LOGGER.error(f"Error during deletion of documents: {e}")
     
@@ -142,7 +141,7 @@ async def close(ctx: RunContext[AgentDeps]) -> str:
 
 async def run_interactive_loop():
     """Starts a continuous chat session with the KG Agent."""
-    lightrag = await initialize_rag(working_dir=WORKING_DIR)
+    lightrag = await initialize_rag()
     deps = AgentDeps(lightrag=lightrag)
     
     message_history = []

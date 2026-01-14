@@ -10,7 +10,6 @@ from ..core.pipeline import initialize_rag
 from ..core.llm import ref_llm, agent_llm
 from ..agents.dependencies import AgentDeps
 from utils.logging import LOGGER
-from utils.file_io import find_dir
 
 load_dotenv()
 
@@ -21,8 +20,6 @@ if os.getenv("LANGSMITH_API_KEY"):
 else:
     LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
 
-WORKING_DIR = find_dir("rag_storage", "./")
-os.makedirs(WORKING_DIR, exist_ok=True)
 
 class RefinedQueries(BaseModel):
     refined_queries: List[str] = Field(
@@ -69,7 +66,7 @@ async def retrieve(ctx: RunContext[AgentDeps], question: str) -> str:
     """
     return await ctx.deps.lightrag.aquery(
         query=question,
-        param=QueryParam(mode="mix", enable_rerank=True, include_references=False),
+        param=QueryParam(mode="mix", enable_rerank=True, include_references=True),
         #system_prompt="""Project Integrity Rule: Every entity is bound to a specific Project Reference Number found in its file_path (e.g., '244036') and in the description. When answering a query about a specific project, you must filter the retrieved entities by this reference number."""
     )
 
@@ -111,7 +108,7 @@ async def rephrase_and_refine_query(ctx: RunContext[AgentDeps], user_query: str)
 
 async def run_interactive_loop():
     """Starts a continuous chat session with the KG Agent."""
-    lightrag = await initialize_rag(working_dir=WORKING_DIR)
+    lightrag = await initialize_rag()
 
     deps = AgentDeps(lightrag=lightrag, refinement_llm=ref_llm)
 

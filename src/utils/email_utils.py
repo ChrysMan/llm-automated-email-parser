@@ -49,8 +49,12 @@ Address\s*:.*|
 Fax\s*:.*|
 mob\..*|
 Mobile\s*:.*|
+Office\s*:.*|
 Phone\s*:.*|
 P\.*s\.*\s*:.*$|
+https?://\S+|<https?://\S+>|                  
+www\.\S+\s+<https?://\S+>|                     
+www\.[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}|
 Disclaimer\s*:.*|
 Στάλθηκε από το Ταχυδρομείο.*|
 Sent from my.*|

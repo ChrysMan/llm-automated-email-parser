@@ -7,7 +7,7 @@ from langchain_community.embeddings.spacy_embeddings import SpacyEmbeddings
 from langchain_community.docstore.in_memory import InMemoryDocstore
 
 from utils.logging import LOGGER
-from utils.file_io import read_json_file, write_file
+from utils.file_io import read_json_file
 
 FAISS_DB_PATH = "/home/chryssida/src/faiss_db.index"
 
@@ -55,12 +55,12 @@ def deduplicate_emails(dict_list: List[dict]) -> list[str]:
             matched_index = Ind[0][0]
             mathed_email = unique_emails[matched_index]
 
-            if similarity < 0.992:
+            if similarity < 0.999:
                 dedup_index.add(embedding_bodies)   # add to in memory db
                 unique_emails.append(email)
             else:
-                continue
-                #print(f"\n\nOriginal email: \n{email}\n\nMatched email:\n{mathed_email}\n\nSimilarity:\n{similarity}")
+                #continue
+                print(f"\n\nOriginal email: \n{email}\n\nMatched email:\n{mathed_email}\n\nSimilarity:\n{similarity}")
     return unique_emails
 
 def create_faiss_db(unique_emails: list[str]):
@@ -89,7 +89,7 @@ def create_faiss_db(unique_emails: list[str]):
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        LOGGER.error("Usage: python create_vectorDB_spacy_faiss.py <file_path>")
+        LOGGER.error("Usage: python deduplicate.py <file_path>")
         sys.exit(1)
 
     file_path = sys.argv[1]

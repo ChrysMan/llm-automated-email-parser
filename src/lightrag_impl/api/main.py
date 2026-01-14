@@ -23,6 +23,9 @@ class ChatInput(BaseModel):
 class ChatOutput(BaseModel):
     response: str
 
+class QueryRequest(BaseModel):
+    query: str
+
 @app.on_event("startup")
 async def startup_event():
     rag = await initialize_rag(working_dir=WORKING_DIR)
@@ -50,6 +53,28 @@ async def chat_endpoint(chat_input: ChatInput):
             chat_input.message,
             deps=deps,
             message_history=chat_input.message_history,
+        )
+
+        return ChatOutput(response=result.output)
+
+    except Exception as ex:
+        raise HTTPException(status_code=500, detail=str(ex))
+
+@app.post("/query")
+async def simple_query_endpoint(request_data: QueryRequest):
+    query_text = request_data.query
+
+    deps = getattr(app.state, "deps", None)
+    supervisor_agent = getattr(app.state, "supervisor_agent", None)
+    
+    if deps is None:
+        raise HTTPException(status_code=503, detail="System not initialized")
+
+    try:
+        result = await supervisor_agent.run(
+            query_text,
+            deps=deps,
+            message_history=None,
         )
 
         return ChatOutput(response=result.output)

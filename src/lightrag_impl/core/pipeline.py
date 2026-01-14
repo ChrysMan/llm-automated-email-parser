@@ -7,11 +7,11 @@ from lightrag.utils import EmbeddingFunc
 from lightrag.kg.shared_storage import initialize_share_data, initialize_pipeline_status
 
 from ..core.llm import llm_model_func, rerunk_func
-from utils.file_io import find_dir, read_json_file
+from utils.file_io import read_json_file
 
 
-WORKING_DIR = find_dir("rag_storage", "./")
-os.makedirs(WORKING_DIR, exist_ok=True)
+WORKING_DIR = "lightrag_impl/core/rag_storage"
+# os.makedirs(WORKING_DIR, exist_ok=True)
 
 async def initialize_rag(working_dir: str = WORKING_DIR) -> LightRAG:
 
@@ -24,7 +24,6 @@ async def initialize_rag(working_dir: str = WORKING_DIR) -> LightRAG:
         #llm_model_kwargs={"host": "http://localhost:11434", "options": {"num_ctx": 32768}},
         vector_storage="FaissVectorDBStorage",
         rerank_model_func=rerunk_func,
-        min_rerank_score=0.3,
         embedding_func=EmbeddingFunc(
             embedding_dim=1024,
             max_token_size=8192,
@@ -83,7 +82,7 @@ async def run_async_query(rag: LightRAG, question: str, mode: str, top_k: int = 
     """
     return await rag.aquery(
         query=question,
-        param=QueryParam(mode=mode, enable_rerank=True, include_references=True), #top_k=top_k,
+        param=QueryParam(mode=mode, enable_rerank=True, include_references=True), 
     )
 
         

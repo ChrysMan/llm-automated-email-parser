@@ -11,7 +11,6 @@ from ..agents.kg_agent import kg_agent
 from ..agents.rag_agent import rag_agent
 from ..agents.dependencies import AgentDeps
 from ..tools.preprocessing_tool import execute_full_preprocessing
-from utils.file_io import find_dir
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -19,9 +18,6 @@ load_dotenv()
 if os.getenv("LANGSMITH_API_KEY"):
     os.environ["LANGCHAIN_TRACING_V2"] = "true"
     os.environ["LANGCHAIN_PROJECT"] = "supervisor_agent"
-
-WORKING_DIR = find_dir("rag_storage", "./")
-os.makedirs(WORKING_DIR, exist_ok=True)
 
 def create_supervisor_agent()-> Agent:
     supervisor_agent = Agent(
@@ -115,7 +111,7 @@ def create_supervisor_agent()-> Agent:
 
 async def run_supervisor():
 
-    rag = await initialize_rag(working_dir=WORKING_DIR)
+    rag = await initialize_rag()
 
     deps = AgentDeps(
         lightrag=rag,

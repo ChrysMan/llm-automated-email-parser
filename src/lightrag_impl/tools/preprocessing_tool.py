@@ -30,16 +30,20 @@ def execute_full_preprocessing(dir_path: str)-> str:
                 LOGGER.info(f"Extraction completed successfully")
             except Exception as e:
                 LOGGER.error(f"Failed to extract or clean email from {filename}: {e}")
-                continue
+                return "An error occurred during email extraction or cleaning using regular expressions."
 
     # Prepare all prompts outside the file loop
-    formatting_prompts = [formatter_and_translator_prompt.format(email=e) for e in all_emails_to_process]
-    results = predictor(formatting_prompts)
+    try:
+        formatting_prompts = [formatter_and_translator_prompt.format(email=e) for e in all_emails_to_process]
+        results = predictor(formatting_prompts)
 
-    str_results = [str(r) for r in results]
+        str_results = [str(r) for r in results]
 
-    cleaning_prompts = [cleaning_prompt.format(email=e) for e in str_results]
-    results = predictor(cleaning_prompts)
+        cleaning_prompts = [cleaning_prompt.format(email=e) for e in str_results]
+        results = predictor(cleaning_prompts)
+    except Exception as e:
+        LOGGER.error(f"Error during LLM processing: {e}")
+        return "An error occurred during LLM processing."
 
     # ---------------Deduplicate results---------------
     try:
