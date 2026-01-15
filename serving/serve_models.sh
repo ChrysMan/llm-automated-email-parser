@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-SESSION_NAME="arian_servers"
-CONDA_ENV="arian_venv"
+SESSION_NAME="arian-servers"
+CONDA_ENV="arian-venv"
 
 # 1. Kill any existing session with this name to start fresh
 tmux kill-session -t $SESSION_NAME 2>/dev/null
