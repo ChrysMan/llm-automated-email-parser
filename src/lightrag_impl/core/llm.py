@@ -7,6 +7,7 @@ from functools import partial
 from lightrag.rerank import generic_rerank_api
 from lightrag.llm.openai import openai_complete_if_cache
 
+
 agent_llm = OpenAIChatModel(
     os.getenv("LLM_AGENT_MODEL", "Qwen/Qwen2.5-3B-Instruct"),
     provider = OpenAIProvider(

@@ -22,24 +22,8 @@ It presents a high-performance Multi-Agent System (MAS) that converts unstructur
 ### Create a Virtual Environment:
 Run the following command in your project's root directory:
 
-#### For Linux/macOS: 
 ```sh
-python3 -m venv myvenv  
-source myvenv/bin/activate 
-```
-or
-```sh
-conda create -n myvenv python=3.12 -y
-conda activate myvenv
-```
-#### For Windows: 
-```sh
-python -m venv myvenv   
-myvenv\Scripts\activate 
-```
-or
-```sh
-conda create -n myvenv python=3.12 -y
+conda env create -f environment.yml
 conda activate myvenv
 ```
 
@@ -101,3 +85,17 @@ uvicorn lightrag_impl.api.main:app --reload --port 8080
 python -m streamlit run lightrag_impl/ui/streamlit_ui.py
 ```
 
+### Evaluation
+First create a new virtual environment as shown above.
+#### Serve LightRAG's api
+```sh
+cd src
+lightrag-server --working-dir ./lightrag_impl/core/rag_storage 
+```
+
+#### Run the evaluation file
+```sh
+
+cd evaluation
+python eval_rag.py
+```

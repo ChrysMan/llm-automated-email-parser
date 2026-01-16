@@ -64,11 +64,23 @@ async def retrieve(ctx: RunContext[AgentDeps], question: str) -> str:
     Returns:
         str: The retrieved information from the RAG system.
     """
-    return await ctx.deps.lightrag.aquery(
+    # raw_data = await ctx.deps.lightrag.aquery_data(
+    #     query=question,
+    #     param=QueryParam(mode="mix", enable_rerank=True, include_references=True)
+    # )
+    # data_section = raw_data["data"]
+    # chunks = data_section.get("chunks", [])
+    # print("type:", type(chunks))
+    # print("\nCHUNKS:\n")
+    # for c in chunks:
+    #     print(c)
+
+    response = await ctx.deps.lightrag.aquery(
         query=question,
-        param=QueryParam(mode="mix", enable_rerank=True, include_references=True),
+        param=QueryParam(mode="mix", enable_rerank=True, include_references=True)
         #system_prompt="""Project Integrity Rule: Every entity is bound to a specific Project Reference Number found in its file_path (e.g., '244036') and in the description. When answering a query about a specific project, you must filter the retrieved entities by this reference number."""
-    )
+    )   
+    return response
 
 @rag_agent.tool
 async def rephrase_and_refine_query(ctx: RunContext[AgentDeps], user_query: str) -> RefinedQueries:

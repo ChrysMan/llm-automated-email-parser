@@ -6,8 +6,8 @@ load_dotenv()
 
 async def main():
     evaluator = RAGEvaluator(
-        test_dataset_path="sample_dataset.json",
-        rag_api_url="http://localhost:8080/"
+        test_dataset_path="sample_dataset.json"
+        #rag_api_url="http://localhost:8080/"
     )
     await evaluator.run()
 

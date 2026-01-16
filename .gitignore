@@ -3,7 +3,6 @@ __pycache__
 *.json
 test.py
 graph_test.ipynb
-environment.yml
 *.env
 *.index
 vllm_ray_ordered.py
