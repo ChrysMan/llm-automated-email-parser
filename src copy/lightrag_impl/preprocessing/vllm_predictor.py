@@ -30,11 +30,13 @@ class LLMPredictor:
             max_retries=3
         )
         self.model = os.getenv("LLM_MODEL", "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8")
+
     @traceable
     def process_single_prompt(self, prompt:str)->str:
         """Processes a single prompt using the standard completions API."""
         response = self.client.completions.create(
             model=self.model,
+            prompt=prompt,
             temperature=0,
             max_tokens=2048,
             stop="End of email"
@@ -63,14 +65,14 @@ class LLMPredictor:
                     preprocessed_emails.append(email_dict)
                     
                 except Exception as e:
-                    LOGGER.error(f"Thread failed during prompt processing: {e}")
+                    LOGGER.error(f"Structured extraction failed: {e}")
                    
         return preprocessed_emails
         
 def main():
     tic1 = time()
     if len(sys.argv) != 2:
-        LOGGER.error("Usage: python emailParsing.py <dir_path>")
+        LOGGER.error("Usage: python vllm_predictor.py <dir_path>")
         sys.exit(1)
 
     dir_path = sys.argv[1]

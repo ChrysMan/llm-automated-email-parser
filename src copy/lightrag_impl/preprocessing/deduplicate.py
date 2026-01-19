@@ -17,14 +17,11 @@ def deduplicate_emails(dict_list: List[dict]) -> list[str]:
 
         email_texts = [f"from: {item.get('from','')}\nsent: {item.get('sent','')}\nto:{item.get('to','')}\ncc:{item.get('cc','')}\nsubject:{item.get('subject','')}\nbody:{item.get('body','')}" 
                 for item in dict_list]
-        email_bodies = [f"body:{item.get('body','')}" for item in dict_list]
     except Exception as e:
         LOGGER.error(f"Failed to read JSON file: {e}")
 
-    nlp = spacy.load("en_core_web_lg")
 
     partially_unique_emails = list(dict.fromkeys(email_texts))
-    expected_unique_emails_bodies = list(dict.fromkeys(email_bodies))
     # print("\nLength of email before set", len(email_texts))
     # print("\nLength of emails after set", len(partially_unique_emails))
     # print("\nLength of email bodies before set", len(email_bodies))
@@ -32,6 +29,8 @@ def deduplicate_emails(dict_list: List[dict]) -> list[str]:
 
     partially_unique_emails_bodies = [text.split("body:", 1)[1] for text in partially_unique_emails]
     
+    nlp = spacy.load("en_core_web_lg")
+
     dim = nlp(partially_unique_emails_bodies[0]).vector.shape[0]
 
     dedup_index = None

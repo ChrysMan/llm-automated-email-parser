@@ -152,7 +152,7 @@ Example 1:
 Input: 
 On May 30, 2023, at 11:23, Maria Doe wrote:
 Goodmorning Mr Manoudakis,
-Λάβαμε μια ενημέρωση σχετικά με μια νέα αποστολή στις 12:00 μμ.
+
 Note: The office will be closed on the 28th of October.
 Best regards
 Maria Doe (Mrs.)
@@ -305,7 +305,6 @@ Cc:
 主题: Προσφορά για Ντουμπάι
 Goodmorning Mr Papadopoulos,
 Λάβαμε μια ενημέρωση σχετικά με μια νέα αποστολή στις 12:00 μμ.
-We received an update about a new shipment.
 Best regards
 John Doe 
 提单一律寄顺丰到付，开票只能开0税率电子发票，均不能抵扣.
@@ -318,7 +317,6 @@ Cc:
 Subject: Offer for Dubai
 Goodmorning Mr Papadopoulos,
 We received an update about a new shipment at 12:00 PM.
-We received an update about a new shipment.
 Best regards
 John Doe 
 All bills of lading must be sent by SF Express to be paid on delivery. Only 0-tax electronic invoices can be issued for invoicing, and no deductions are allowed.

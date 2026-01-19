@@ -121,7 +121,7 @@ if __name__ == "__main__":
 
     tic1 = time()
 
-    hf_token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
+    #hf_token = os.getenv("HF_TOKEN")
     
     if len(sys.argv) != 2:
         LOGGER.error("Usage: python emailParsing.py <dir_path>")
