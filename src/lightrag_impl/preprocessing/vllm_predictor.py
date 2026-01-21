@@ -29,12 +29,13 @@ class LLMPredictor:
             api_key=os.getenv("LLM_BINDING_API_KEY"),
             max_retries=3
         )
+        self.model = os.getenv("LLM_MODEL", "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8")
 
     @traceable
     def process_single_prompt(self, prompt:str)->str:
         """Processes a single prompt using the standard completions API."""
         response = self.client.completions.create(
-            model=os.getenv("LLM_MODEL", "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8"),
+            model=self.model,
             prompt=prompt,
             temperature=0,
             max_tokens=2048,
@@ -64,56 +65,6 @@ class LLMPredictor:
                     preprocessed_emails.append(email_dict)
                     
                 except Exception as e:
-                    LOGGER.error(f"Thread failed during prompt processing: {e}")
+                    LOGGER.error(f"Structured extraction failed: {e}")
                    
         return preprocessed_emails
-        
-def main():
-    tic1 = time()
-    if len(sys.argv) != 2:
-        LOGGER.error("Usage: python emailParsing.py <dir_path>")
-        sys.exit(1)
-
-    dir_path = sys.argv[1]
-    if not os.path.isdir(dir_path):
-        LOGGER.error(f"{dir_path} is not a valid directory.")
-        sys.exit(1)
-
-    folder_name = os.path.basename(os.path.normpath(dir_path))
-
-    output_path = os.path.join(dir_path, f"{folder_name}.json")
-
-    predictor = LLMPredictor()
-
-    all_emails_to_process = []
-    for filename in os.listdir(dir_path):
-        if filename.endswith(".msg"):
-            file_path = os.path.join(dir_path, filename)
-
-            try:
-                raw_msg_content = extract_msg_file(file_path)
-                cleaned_msg_content = clean_data(raw_msg_content)
-                all_emails_to_process.extend(split_email_thread(cleaned_msg_content))
-
-            except Exception as e:
-                LOGGER.error(f"Failed to extract or clean email from {filename}: {e}")
-                continue
-
-    # Prepare all prompts outside the file loop
-    formatting_prompts = [formatter_and_translator_prompt.format(email=e) for e in all_emails_to_process]
-    results = predictor(formatting_prompts)
-
-    str_results = [str(r) for r in results]
-
-    cleaning_prompts = [cleaning_prompt.format(email=e) for e in str_results]
-    results = predictor(cleaning_prompts)
-
-
-    with open(output_path, "w", encoding="utf-8") as file:
-        json.dump(results, file, indent=4, ensure_ascii=False, default=str)
-
-    LOGGER.info(f"Time taken to process: {time() - tic1} seconds")
-
-
-if __name__ == "__main__":
-    main()

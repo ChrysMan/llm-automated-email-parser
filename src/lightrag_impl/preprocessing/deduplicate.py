@@ -17,14 +17,11 @@ def deduplicate_emails(dict_list: List[dict]) -> list[str]:
 
         email_texts = [f"from: {item.get('from','')}\nsent: {item.get('sent','')}\nto:{item.get('to','')}\ncc:{item.get('cc','')}\nsubject:{item.get('subject','')}\nbody:{item.get('body','')}" 
                 for item in dict_list]
-        email_bodies = [f"body:{item.get('body','')}" for item in dict_list]
     except Exception as e:
         LOGGER.error(f"Failed to read JSON file: {e}")
 
-    nlp = spacy.load("en_core_web_lg")
 
     partially_unique_emails = list(dict.fromkeys(email_texts))
-    expected_unique_emails_bodies = list(dict.fromkeys(email_bodies))
     # print("\nLength of email before set", len(email_texts))
     # print("\nLength of emails after set", len(partially_unique_emails))
     # print("\nLength of email bodies before set", len(email_bodies))
@@ -32,6 +29,8 @@ def deduplicate_emails(dict_list: List[dict]) -> list[str]:
 
     partially_unique_emails_bodies = [text.split("body:", 1)[1] for text in partially_unique_emails]
     
+    nlp = spacy.load("en_core_web_lg")
+
     dim = nlp(partially_unique_emails_bodies[0]).vector.shape[0]
 
     dedup_index = None
@@ -62,30 +61,6 @@ def deduplicate_emails(dict_list: List[dict]) -> list[str]:
                 #continue
                 print(f"\n\nOriginal email: \n{email}\n\nMatched email:\n{mathed_email}\n\nSimilarity:\n{similarity}")
     return unique_emails
-
-def create_faiss_db(unique_emails: list[str]):
-    """Create/Update persistent FAISS DB from unique emails"""
-    nlp = spacy.load("en_core_web_lg")
-    embeddings = np.array([doc.vector for doc in map(nlp, unique_emails)], dtype=np.float32)
-    faiss.normalize_L2(embeddings)
-
-
-    if os.path.exists(FAISS_DB_PATH):
-        print("Loading existing FAISS index...")
-        vectorstore = FAISS.load_local(FAISS_DB_PATH, SpacyEmbeddings(model_name="en_core_web_lg"), allow_dangerous_deserialization=True)
-        vectorstore.add_embeddings(zip(unique_emails, embeddings))
-    else:
-        print("Creating new FAISS index...")
-        index = faiss.IndexFlatIP(embeddings.shape[1])  # Using Inner Product (dot product) for similarity search
-        embedder = SpacyEmbeddings(model_name="en_core_web_lg")
-        vectorstore = FAISS(
-            embedding_function=embedder,
-            index=index,
-            docstore= InMemoryDocstore(),
-            index_to_docstore_id={}
-            )
-        vectorstore.add_embeddings(zip(unique_emails, embeddings))
-    vectorstore.save_local(FAISS_DB_PATH)
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:

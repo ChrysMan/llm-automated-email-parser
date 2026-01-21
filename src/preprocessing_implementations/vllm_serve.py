@@ -37,8 +37,8 @@ class LLMPredictor:
             model=os.getenv("LLM_MODEL", "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8"),
             prompt=prompt,
             temperature=0,
-            max_tokens=2048,
-            stop="End of email"
+            max_tokens=8192,
+            #stop="End of email"
         )
 
         return response.choices[0].text

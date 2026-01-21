@@ -37,21 +37,21 @@ def clean_data(text: str) -> str:
     clean_text = re.sub(r"^主题:", "Subject: ", clean_text, flags=re.MULTILINE)
     clean_text = re.sub(r"^Date:", "Sent:", clean_text, flags=re.MULTILINE) 
 
+# Tel\s*:.*|
+# (T|M)\s*:.*|
+# E(-)?mail\s*:.*|
+# Skype\s*:.*|
+# Dir\s*:.*|
+# Website\s*:.*|
+# Web\s*:.*|
+# Address\s*:.*|
+# Fax\s*:.*|
+# mob\..*|
+# Mobile\s*:.*|
+# Office\s*:.*|
+# Phone\s*:.*|
+# P\.*s\.*\s*:.*$|
     pattern = r"""<mailto:.*>|
-Tel\s*:.*|
-(T|M)\s*:.*|
-E(-)?mail\s*:.*|
-Skype\s*:.*|
-Dir\s*:.*|
-Website\s*:.*|
-Web\s*:.*|
-Address\s*:.*|
-Fax\s*:.*|
-mob\..*|
-Mobile\s*:.*|
-Office\s*:.*|
-Phone\s*:.*|
-P\.*s\.*\s*:.*$|
 https?://\S+|<https?://\S+>|                  
 www\.\S+\s+<https?://\S+>|                     
 www\.[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}|

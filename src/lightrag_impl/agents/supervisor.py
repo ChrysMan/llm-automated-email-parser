@@ -77,8 +77,8 @@ def create_supervisor_agent()-> Agent:
             return f"{dir_path} is not a valid directory."
         elif not any(fname.endswith('.msg') for fname in os.listdir(dir_path)):
             return f"No .msg files found in the directory {dir_path}."
-        elif any(fname.endswith('unique.json') for fname in os.listdir(dir_path)):
-            return f"Email preprocessing has already been completed for the directory {dir_path}."
+        #elif any(fname.endswith('unique.json') for fname in os.listdir(dir_path)):
+        #    return f"Email preprocessing has already been completed for the directory {dir_path}."
         else:
             result = execute_full_preprocessing(dir_path = dir_path)
             return result

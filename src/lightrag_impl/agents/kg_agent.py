@@ -29,13 +29,14 @@ kg_agent = Agent(
     model_settings={'parallel_tool_calls': False},
     system_prompt="""You are an Enterprise Email Intelligence Agent managing a LightRAG pipeline and Neo4j Knowledge Graph.
 
-    You have access to tools: add_data, delete_rag_storage, and close.
+    You have access to tools: add_data, delete_rag_storage, clear_cache, and close.
     Reason over which tool to call based on the user's request and call them appropriately. 
     You can call multiple tools in a single turn sequencially until the question is answered. Provide clear and detailed responses based on the outputs of the tools you invoke.
 
     OPERATIONAL RULES:
     1. Use each tool only when asked to do so by the user.
-    2. Safety: `delete_rag_storage` is destructive. Use it ONLY when the user explicitly requests to "delete", "wipe," "reset," or "clear" the entire system.
+    2. Safety: `delete_rag_storage` is destructive. Use it ONLY when the user explicitly requests to "delete" the *entire system* or graph.
+    3. Safety: `clear_cache` is destructive. Use it only when the user explicitly requests to "delete" or "clear" the *history* or the LLM responses.
     3. Finalization: You ONLY call `close` when the user requests to close or finalize the system to ensure data is saved and connections are closed safely.
 
     TONE: Professional, secure."""
@@ -45,7 +46,7 @@ kg_agent = Agent(
 @traceable
 @kg_agent.tool 
 async def delete_rag_storage(ctx: RunContext[AgentDeps]) -> str:
-    """Deletes all data in the RAG storage and Neo4j Graph.
+    """Deletes all data and response cache in the RAG storage and Neo4j Graph.
     Use this tool ONLY when the user explicitly requests to "delete", "wipe," "reset," or "clear" the entire system - it is a destructive operation.
     
     Args:
@@ -63,30 +64,46 @@ async def delete_rag_storage(ctx: RunContext[AgentDeps]) -> str:
 
     if not file_path:
         LOGGER.error(f"Could not find {target_file} in {WORKING_DIR} or its subdirectories.")
-        return
+        return f"Could not find {target_file} in {WORKING_DIR} or its subdirectories."
     
     if ctx.deps.lightrag:
         try:
             dicts = read_json_file(file_path)
-            id_list = [json.dumps(d) for d in dicts]
-            
-            for id in id_list:
-                await ctx.deps.lightrag.adelete_by_doc_id(id.replace('"', ''), True)
+        
+            for doc_id, _ in dicts.items():
+                await ctx.deps.lightrag.adelete_by_doc_id(doc_id, True)
 
             dicts_doubleCheck = read_json_file(file_path_doubleCheck)
-            if dicts_doubleCheck:
-                entity_chunks = [json.dumps(d) for d in dicts_doubleCheck]
-
-                for entity_name in entity_chunks:
-                    await ctx.deps.lightrag.adelete_by_entity(entity_name.replace('"', ''))
+            
+            for entity, _ in dicts_doubleCheck.items():
+                await ctx.deps.lightrag.adelete_by_entity(entity)
 
             # ct = CleanupTool()
             # await ct.run()
 
         except Exception as e:
             LOGGER.error(f"Error during deletion of documents: {e}")
+            return f"Error during deletion of documents: {e}"
     
-    return "RAG storage has been cleared."
+    return "RAG storage and cache has been cleared."
+
+@traceable
+@kg_agent.tool
+async def clear_cache(ctx: RunContext[AgentDeps]) -> str:
+    """Clear all caches responses from the LLM response cache storage.
+    Args:
+        ctx (RunContext[AgentDeps]): The run context containing dependencies.
+
+    Returns:
+        str: Confirmation message upon completion or Error message upon failure.
+
+    """
+    try:
+        await ctx.deps.lightrag.aclear_cache()
+    except Exception as e:
+        LOGGER.error(f"Error while trying to clear response cache: {e}")
+        return f"Error while trying to clear LLM response cache storage: {e}"
+    return "Succesfully cleared LLM response cache storage."
 
 @traceable
 @kg_agent.tool

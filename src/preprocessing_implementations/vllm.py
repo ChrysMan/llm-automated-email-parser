@@ -10,7 +10,7 @@ from utils.logging import LOGGER
 from utils.email_utils import extract_msg_file, clean_data, split_email_thread
 from lightrag_impl.prompts.preprocessing_prompts import cleaning_prompt, formatter_and_translator_prompt
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+#os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 os.environ["VLLM_DISABLE_COMPILE_CACHE"] = "0"
 
 load_dotenv()
@@ -33,7 +33,6 @@ class LLMPredictor:
             enforce_eager=True,
             dtype='float16',
             gpu_memory_utilization=0.9,
-            #cpu_offload_gb=2,
             max_num_seqs=20,    #maximum number of active sequences (parallel inferences)
             max_model_len=4096
         )

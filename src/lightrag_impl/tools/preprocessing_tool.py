@@ -30,7 +30,7 @@ def execute_full_preprocessing(dir_path: str)-> str:
                 LOGGER.info(f"Extraction completed successfully")
             except Exception as e:
                 LOGGER.error(f"Failed to extract or clean email from {filename}: {e}")
-                return "An error occurred during email extraction or cleaning using regular expressions."
+                return "Failed to extract or clean email from {filename}: {e}"
 
     # Prepare all prompts outside the file loop
     try:
@@ -43,7 +43,7 @@ def execute_full_preprocessing(dir_path: str)-> str:
         results = predictor(cleaning_prompts)
     except Exception as e:
         LOGGER.error(f"Error during LLM processing: {e}")
-        return "An error occurred during LLM processing."
+        return f"Error during LLM processing: {e}"
 
     # ---------------Deduplicate results---------------
     try:
@@ -70,5 +70,5 @@ def execute_full_preprocessing(dir_path: str)-> str:
         return f"The preprocessing has completed in {time() - tic} seconds and the output is saved at {output_path}."
     except Exception as e:
         LOGGER.error(f"Error during deduplication or saving: {e}")
-        return "An error occurred during deduplication or saving."
+        return "Error during deduplication or saving: {e}"
    

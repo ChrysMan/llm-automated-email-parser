@@ -18,7 +18,7 @@ model_name = "all-MiniLM-L6-v2"
 
 model = SentenceTransformer(
     model_name,
-    device="cuda:7",  # the GPU device
+    device="cuda:0",  # the GPU device
     model_kwargs={"attn_implementation": "sdpa", "torch_dtype": "float16"}, #"device_map": {"": torch.device("cuda:7")}
     tokenizer_kwargs={"padding_side": "left"},
     trust_remote_code=True
