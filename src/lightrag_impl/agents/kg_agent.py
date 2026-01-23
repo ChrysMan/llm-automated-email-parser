@@ -37,7 +37,7 @@ kg_agent = Agent(
     1. Use each tool only when asked to do so by the user.
     2. Safety: `delete_rag_storage` is destructive. Use it ONLY when the user explicitly requests to "delete" the *entire system* or graph.
     3. Safety: `clear_cache` is destructive. Use it only when the user explicitly requests to "delete" or "clear" the *history* or the LLM responses.
-    3. Finalization: You ONLY call `close` when the user requests to close or finalize the system to ensure data is saved and connections are closed safely.
+    3. Finalization: You ONLY call `close` when the user requests to close or finalize the system.
 
     TONE: Professional, secure."""
 )

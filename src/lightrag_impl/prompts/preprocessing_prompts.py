@@ -37,10 +37,10 @@ Output format:
 Example 1:
 Input: 
 On May 30, 2023, at 11:23, Maria Doe wrote:
-Goodmorning Mr Manoudakis,
-
-Note: The office will be closed on the 28th of October.
-Best regards
+Καλημέρα κ. Μανουδάκη,
+Λάβαμε μια ενημέρωση σχετικά με μια νέα αποστολή στις 12:00 μ.μ.
+Note: Το γραφείο θα είναι κλειστό στις 28 Οκτωβρίου.
+Με εκτίμηση
 Maria Doe (Mrs.)
 Export Manager
 Company XYZ Ltd.    
@@ -53,6 +53,7 @@ Cc:
 Subject:
 Goodmorning Mr Manoudakis,
 We received an update about a new shipment at 12:00 pm.
+Note: The office will be closed on the 28th of October.
 Best regards
 Maria Doe (Mrs.)
 Export Manager

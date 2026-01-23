@@ -1,17 +1,24 @@
 import sys
-import spacy, json, faiss, re, os
+import json, faiss, re, os
 import numpy as np
 from typing import List
-from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings.spacy_embeddings import SpacyEmbeddings
-from langchain_community.docstore.in_memory import InMemoryDocstore
+from langchain_huggingface import HuggingFaceEmbeddings
 
+#from lightrag_impl.core.llm import hf
 from utils.logging import LOGGER
 from utils.file_io import read_json_file
 
-FAISS_DB_PATH = "/home/chryssida/src/faiss_db.index"
 
 def deduplicate_emails(dict_list: List[dict]) -> list[str]:
+    try:
+        embedder = HuggingFaceEmbeddings(
+            model_name = "BAAI/bge-m3",
+            model_kwargs={"device": "cpu"},
+            encode_kwargs = {'normalize_embeddings': True}  
+        )
+    except Exception as e:
+        LOGGER.error(f"Error while initializing the embedder: {e}")
+        return f"Error while initializing the embedder: {e}"
     try:
         dict_list.reverse()
 
@@ -19,6 +26,7 @@ def deduplicate_emails(dict_list: List[dict]) -> list[str]:
                 for item in dict_list]
     except Exception as e:
         LOGGER.error(f"Failed to read JSON file: {e}")
+        return f"Failed to read JSON file: {e}"
 
 
     partially_unique_emails = list(dict.fromkeys(email_texts))
@@ -29,33 +37,44 @@ def deduplicate_emails(dict_list: List[dict]) -> list[str]:
 
     partially_unique_emails_bodies = [text.split("body:", 1)[1] for text in partially_unique_emails]
     
-    nlp = spacy.load("en_core_web_lg")
-
-    dim = nlp(partially_unique_emails_bodies[0]).vector.shape[0]
+    embeddings = embedder.embed_documents(partially_unique_emails_bodies)
+    
+    # nlp = spacy.load("en_core_web_lg")
+    # dim = nlp(partially_unique_emails_bodies[0]).vector.shape[0]
 
     dedup_index = None
     unique_emails = []
 
-    for body, email in zip(partially_unique_emails_bodies, partially_unique_emails):
+    for body, email in zip(embeddings, partially_unique_emails):
         """Embeddings for deduplication DB"""
-        doc_bodies = nlp(body)
-        embedding_bodies = np.array(doc_bodies.vector, dtype=np.float32).reshape(1, -1)
-        faiss.normalize_L2(embedding_bodies)
+        # doc_bodies = nlp(body)
+        # embedding_bodies = np.array(doc_bodies.vector, dtype=np.float32).reshape(1, -1)
+        # faiss.normalize_L2(embedding_bodies)
 
+        body = np.array(body, dtype=np.float32).reshape(1, -1)
+
+        
         if dedup_index is None:
-            dim = doc_bodies.vector.shape[0]
-            dedup_index = faiss.IndexFlatIP(dim)
-            dedup_index.add(embedding_bodies)
-            unique_emails.append(email)
+            try:
+                dim = len(body[0]) 
+                #dim = doc_bodies.vector.shape[0]
+                dedup_index = faiss.IndexFlatIP(dim)
+                dedup_index.add(body)
+                unique_emails.append(email)
+            except Exception as e:
+                LOGGER.error(f"Error here: {e}")
 
         else:
-            Dist, Ind = dedup_index.search(embedding_bodies, k=1)
-            similarity = Dist[0][0]
-            matched_index = Ind[0][0]
-            mathed_email = unique_emails[matched_index]
+            try:
+                Dist, Ind = dedup_index.search(body, k=1)
+                similarity = Dist[0][0]
+                matched_index = Ind[0][0]
+                mathed_email = unique_emails[matched_index]
+            except Exception as e:
+                LOGGER.error(f"Error here!: {e}")
 
-            if similarity < 0.999:
-                dedup_index.add(embedding_bodies)   # add to in memory db
+            if similarity < 0.99:
+                dedup_index.add(body)   # add to in memory db
                 unique_emails.append(email)
             else:
                 #continue
@@ -68,12 +87,14 @@ if __name__ == "__main__":
         sys.exit(1)
 
     file_path = sys.argv[1]
+    #file_path = "/home/chryssida/DATA_TUC-KRITI/AIR EXPORT/230009/230009.json"
 
     if not os.path.isfile(file_path):
         LOGGER.error(f"{file_path} is not a valid file.")
         sys.exit(1)
 
     dir_path = os.path.dirname(file_path)
+   
     try:
         json_sentences = read_json_file(file_path)
         unique_emails = deduplicate_emails(json_sentences)
@@ -108,4 +129,3 @@ if __name__ == "__main__":
         LOGGER.error(f"Error during deduplication: {e}")
         sys.exit(1)
     
-    #create_faiss_db(unique_emails)

@@ -2,10 +2,10 @@ import asyncio, os, sys
 import pytesseract
 import tempfile
 import pandas as pd
-from lightrag_impl.utils.file_io import write_file
+from utils.file_io import write_file
 from time import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from lightrag_impl.utils.logging import LOGGER
+from utils.logging import LOGGER
 from langchain_community.document_loaders import DirectoryLoader, TextLoader, JSONLoader
 from langchain.text_splitter import CharacterTextSplitter
 from langchain_ollama import OllamaEmbeddings, ChatOllama

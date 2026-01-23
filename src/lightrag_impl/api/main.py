@@ -2,6 +2,7 @@ import os
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from typing import List, Optional, Literal
 
 from ..core.llm import ref_llm
 from ..core.pipeline import initialize_rag
@@ -16,9 +17,13 @@ os.makedirs(WORKING_DIR, exist_ok=True)
 
 app = FastAPI()
 
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant", "system"]
+    content: str
+
 class ChatInput(BaseModel):
     message: str
-    message_history: list | None = None
+    message_history: Optional[List[ChatMessage]] = None
 
 class ChatOutput(BaseModel):
     response: str

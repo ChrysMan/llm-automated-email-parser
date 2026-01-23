@@ -38,7 +38,7 @@ class LLMPredictor:
             prompt=prompt,
             temperature=0,
             max_tokens=8192,
-            #stop="End of email"
+            stop="End of email"
         )
 
         return response.choices[0].text
@@ -71,7 +71,7 @@ class LLMPredictor:
 def main():
     tic1 = time()
     if len(sys.argv) != 2:
-        LOGGER.error("Usage: python emailParsing.py <dir_path>")
+        LOGGER.error("Usage: python vllm_serve.py <dir_path>")
         sys.exit(1)
 
     dir_path = sys.argv[1]

@@ -7,7 +7,7 @@ load_dotenv()
 
 FASTAPI_URL = os.getenv("LIGHTRAG_API_URL")
 
-MAX_HISTORY_LENGTH = 10
+MAX_HISTORY_LENGTH = 4
 
 def trim_message_history(messages):
     """Trim message history to prevent memory issues in long conversations."""
@@ -36,12 +36,12 @@ if prompt := st.chat_input("Type your message here..."):
         message_placeholder = st.empty()
         full_response = ""
 
-        last_messages = trim_message_history(st.session_state["messages"])
+        history = trim_message_history(st.session_state["messages"])
         with st.spinner('Thinking...'):
             try:
                 response = requests.post(
                     FASTAPI_URL, 
-                    json={"message": prompt, "message_history": last_messages}
+                    json={"message": prompt, "message_history": st.session_state["messages"]}
                 )
                 
                 if response.status_code == 200:
@@ -59,5 +59,7 @@ if prompt := st.chat_input("Type your message here..."):
         
         message_placeholder.markdown(full_response)
         st.session_state.messages.append({"role": "assistant", "content": full_response})
+    
+    print(f"\n\nHistory:\n {history}")
     
     st.rerun()
