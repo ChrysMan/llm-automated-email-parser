@@ -3,10 +3,9 @@ from typing import List
 from pydantic import BaseModel, Field
 from pydantic_ai import RunContext
 from pydantic_ai.agent import Agent
-from lightrag import QueryParam
 from dotenv import load_dotenv
 
-from ..core.pipeline import initialize_rag
+from ..core.pipeline import initialize_rag, run_async_query
 from ..core.llm import ref_llm, agent_llm
 from ..agents.dependencies import AgentDeps
 from utils.logging import LOGGER
@@ -35,20 +34,20 @@ rag_agent = Agent(
     deps_type=AgentDeps,
     retries=3,
     model_settings={'parallel_tool_calls': False},
-    system_prompt="""You are an Enterprise Retrieval Expert Agent operating over a LightRAG pipeline to answer user queries accurately. 
-    The Knowledge Graph contains email data from a maritime corporation's internal and external communications.
+    system_prompt="""You are an Enterprise Retrieval Expert Agent managing a LightRAG pipeline for maritime corporation email data queries.
 
-    You have access to tools: retrieve, rephrase_and_refine_query 
+TOOLS:
+1. retrieve: Search and retrieve relevant information from the knowledge graph.
+2. rephrase_and_refine_query: Transform ambiguous, incomplete, or broad queries into 1-3 specific search queries.
 
-    OPERATIONAL RULES:
-    1. Retrieval-first: For any information-seeking query, ensure retrieval is performed from the knowledge graph before answering.
-    2. Query refinement: Use `rephrase_and_refine_query` when the user query is ambiguous, incomplete, complex, or overly broad and then use the refined queries to retrieve relevant documents from the knowledge graph. Use this tool instead of questioning the user for clarification.
-    3. Tool usage: Reason over which tool to call based on the user's request and call them appropriately. 
-    You can call multiple tools in a single turn sequencially until the question is answered.
-    4. Accuracy: Answer only information relevant to the question asked. If retrieval returns no results, clearly state that the information is not available in the graph.
-    5. Output: Provide clear and detailed responses based on the outputs of the tools you invoke.
+CRITICAL GUIDELINES:
+1. Retrieval Priority: Always perform retrieval from the knowledge graph before answering information queries.
+2. Query Optimization: Use rephrase_and_refine_query for ambiguous/complex/broad queries instead of asking for clarification.
+3. Sequential Processing: Execute tools sequentially within a single turn when needed to fully answer questions.
+4. Accuracy Focus: Answer only based on retrieved information; clearly state when data is unavailable.
+5. Response Quality: Provide clear, detailed, fact-based responses from tool outputs.
 
-    TONE: Professional, secure, and fact-based."""
+COMMUNICATION: Maintain professional, secure, and evidence-based responses."""
 )
 
 
@@ -75,11 +74,7 @@ async def retrieve(ctx: RunContext[AgentDeps], question: str) -> str:
     # for c in chunks:
     #     print(c)
 
-    response = await ctx.deps.lightrag.aquery(
-        query=question,
-        param=QueryParam(mode="mix", enable_rerank=True, include_references=True)
-        #system_prompt="""Project Integrity Rule: Every entity is bound to a specific Project Reference Number found in its file_path (e.g., '244036') and in the description. When answering a query about a specific project, you must filter the retrieved entities by this reference number."""
-    )   
+    response = await run_async_query(rag = ctx.deps.lightrag, question=question, mode="mix")  
     return response
 
 @rag_agent.tool

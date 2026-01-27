@@ -63,6 +63,7 @@ def execute_full_preprocessing(dir_path: str)-> str:
 
                 email_dict["body"] = body_part.rstrip()
                 emails_json.append(email_dict)
+
         with open(output_path, "w", encoding="utf-8") as file:
             json.dump(emails_json, file, indent=4, ensure_ascii=False, default=str)
 

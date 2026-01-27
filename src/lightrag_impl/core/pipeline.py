@@ -28,9 +28,6 @@ async def initialize_rag(working_dir: str = WORKING_DIR) -> LightRAG:
             embedding_dim=1024,
             max_token_size=8192,
             func=partial(ollama_embed.func, embed_model="bge-m3:latest", host="http://localhost:11434") # Need to pull it first
-            # func=lambda texts: ollama_embed(
-            #     texts, embed_model="nomic-embed-text", host="http://localhost:11434"
-            #     )
         )
     )
 
@@ -76,13 +73,20 @@ async def index_data(rag: LightRAG, dir_path: str)-> str:
     # deepseek modelo
 
 
-async def run_async_query(rag: LightRAG, question: str, mode: str, top_k: int = 5) -> str:
+async def run_async_query(rag: LightRAG, question: str, mode: str) -> str:
     """
     Execute an async RAG query using .aquery method 
     """
     return await rag.aquery(
         query=question,
-        param=QueryParam(mode=mode, enable_rerank=True, include_references=True), 
+        param=QueryParam(
+            mode=mode, 
+            enable_rerank=True, 
+            include_references=True,
+            user_prompt="""PROJECT INTEGRITY PROTOCOL: Each entity in the knowledge graph is linked to a specific Project ID. This identifier appears in email subjects and entity descriptions.
+
+QUERY GUIDANCE: When responding to project-specific questions, filter results to include ONLY entities and context chunks matching the specified project reference number. This ensures accurate, project-isolated responses and prevents cross-contamination between different projects. Never use information from chunks or entities outside the specified project scope."""
+        )
     )
 
         

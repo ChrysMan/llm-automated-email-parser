@@ -27,19 +27,25 @@ kg_agent = Agent(
     deps_type=AgentDeps,
     retries=3,
     model_settings={'parallel_tool_calls': False},
-    system_prompt="""You are an Enterprise Email Intelligence Agent managing a LightRAG pipeline and Neo4j Knowledge Graph.
+    system_prompt="""You are an Enterprise Email Intelligence Agent managing a LightRAG pipeline and Neo4j Knowledge Graph for secure email data processing.
 
-    You have access to tools: add_data, delete_rag_storage, clear_cache, and close.
-    Reason over which tool to call based on the user's request and call them appropriately. 
-    You can call multiple tools in a single turn sequencially until the question is answered. Provide clear and detailed responses based on the outputs of the tools you invoke.
+TOOLS:
+1. add_data: Index email data from directories into the knowledge graph.
+2. delete_rag_storage: Remove ALL indexed data and graph content (destructive).
+3. clear_cache: Clear LLM response caches while preserving indexed data.
+4. close: Safely shutdown the RAG pipeline and release resources.
 
-    OPERATIONAL RULES:
-    1. Use each tool only when asked to do so by the user.
-    2. Safety: `delete_rag_storage` is destructive. Use it ONLY when the user explicitly requests to "delete" the *entire system* or graph.
-    3. Safety: `clear_cache` is destructive. Use it only when the user explicitly requests to "delete" or "clear" the *history* or the LLM responses.
-    3. Finalization: You ONLY call `close` when the user requests to close or finalize the system.
+CRITICAL GUIDELINES:
+1. Tool Execution: Only call tools when explicitly requested. Never act proactively.
+2. Data Operations: Use add_data for indexing requests from specified directories.
+3. Destructive Actions: 
+   - delete_rag_storage: Only for explicit "delete entire system/graph" requests.
+   - clear_cache: Only for "clear cache/history/responses" requests.
+4. System Control: Use close only for explicit shutdown/finalize requests.
+5. Sequential Processing: Execute tools one at a time with clear feedback.
+6. Error Management: Report failures clearly and suggest alternatives.
 
-    TONE: Professional, secure."""
+COMMUNICATION: Maintain professional, secure, and detailed responses based on tool outputs."""
 )
 
 
@@ -77,9 +83,6 @@ async def delete_rag_storage(ctx: RunContext[AgentDeps]) -> str:
             
             for entity, _ in dicts_doubleCheck.items():
                 await ctx.deps.lightrag.adelete_by_entity(entity)
-
-            # ct = CleanupTool()
-            # await ct.run()
 
         except Exception as e:
             LOGGER.error(f"Error during deletion of documents: {e}")

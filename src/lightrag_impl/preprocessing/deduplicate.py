@@ -30,26 +30,16 @@ def deduplicate_emails(dict_list: List[dict]) -> list[str]:
 
 
     partially_unique_emails = list(dict.fromkeys(email_texts))
-    # print("\nLength of email before set", len(email_texts))
-    # print("\nLength of emails after set", len(partially_unique_emails))
-    # print("\nLength of email bodies before set", len(email_bodies))
-    # print("\nLength of emails bodies after set", len(expected_unique_emails_bodies))
 
     partially_unique_emails_bodies = [text.split("body:", 1)[1] for text in partially_unique_emails]
     
     embeddings = embedder.embed_documents(partially_unique_emails_bodies)
-    
-    # nlp = spacy.load("en_core_web_lg")
-    # dim = nlp(partially_unique_emails_bodies[0]).vector.shape[0]
 
     dedup_index = None
     unique_emails = []
 
     for body, email in zip(embeddings, partially_unique_emails):
         """Embeddings for deduplication DB"""
-        # doc_bodies = nlp(body)
-        # embedding_bodies = np.array(doc_bodies.vector, dtype=np.float32).reshape(1, -1)
-        # faiss.normalize_L2(embedding_bodies)
 
         body = np.array(body, dtype=np.float32).reshape(1, -1)
 
@@ -73,7 +63,7 @@ def deduplicate_emails(dict_list: List[dict]) -> list[str]:
             except Exception as e:
                 LOGGER.error(f"Error here!: {e}")
 
-            if similarity < 0.99:
+            if similarity < 0.983:
                 dedup_index.add(body)   # add to in memory db
                 unique_emails.append(email)
             else:
