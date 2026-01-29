@@ -20,8 +20,9 @@ Task 1: Translate every non-English segment into proper natural English words. I
     Translation Rules:
     1. Do not modify text that is already in English. 
     2. Do not use transliteration. For example "Δευτέρα" becomes "Monday", not "Deutera".  
+    3. Translate words in a way that is appropriate for the context of **commercial shipping, cargo logistics, and freight operations**.
                                                                                                               
-Task 2: Reformat email headers into a standardized structure while preserving the email text exactly as it appears in the input.
+Task 2: Reformat email headers into a standardized structure while preserving the email text **exactly** as it appears in the input.
     Formatting Rules: 
     1. Format headers into the following fields (in this exact order):
         - From: + sender (exactly as in input)
@@ -98,6 +99,10 @@ Process the following email:
 <|start_header_id|>assistant<|end_header_id>                                                                                                                                                                   
 """
 )
+#(1) A signature block begins with a closing greeting "Best regards", "Thanks and Best regards", "Kind regards", "Sincerely", "Yours faithfully", "Tks & Best Regards", or similar) and ends with the sender's name on the next line.  
+#(2) After the sender's name, stop keeping any further lines — even if they contain formatting, phone numbers, addresses, website URLs, or miscellaneous text.
+#- Preserve the body until the cut point. 
+#Delete everything after the sender’s name, but preserve only the job title / role and company/organization name lines if they exist.
 
 
 cleaning_prompt = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
@@ -106,21 +111,23 @@ You are an email cleaning agent. You have two tasks:
 2. Remove duplicates and apostrophes (" or ') from the contacts in the headers.     
 
 Rules for task 1:
-(1) A signature block begins with a closing greeting "Best regards", "Thanks and Best regards", "Kind regards", "Sincerely", "Yours faithfully", "Tks & Best Regards", "Ευχαριστώ", "Ευχαριστώ πολύ", "Με εκτίμηση" or similar) and ends with the sender's name on the next line.  
-(2) AFTER the sender’s name, delete everything EXCEPT job titles or roles and company or organization names IF they exist.
-(3) If no closing greeting + name is found, remove only clearly irrelevant trailing content (e.g. disclaimers, antivirus notices, footers, device signatures), and preserve all meaningful email body text.
-(4) Do not invent, rewrite, or add content. Preserve all spacing, line breaks, punctuation, and formatting exactly as in the input.  
+(1) After the sender’s name, keep only the following lines, in order, if they exist:
+  -Job title or role
+  -Company or organization name
+Delete all lines after these.
+(2) Remove clearly irrelevant trailing content (e.g. disclaimers, disclaimer-like notes, boilerplate, antivirus notices, footers, device signatures), and preserve all meaningful email body text.
+(3) Do not invent, rewrite, or add content. Preserve all spacing, line breaks, punctuation, and formatting exactly as in the input.  
 
 Rules for task 2:                             
 (1) Process the fields "From:", "To:", "Cc:"  sequentially, using the following rules in order:
     - Remove the duplicate emails and names from the contacts.                                                     
-    - Remove apostrophes (" or ') from the contacts.                                            
+    - Remove apostrophes (" or ') from the contacts.
+    - Do not remove any contacts, only duplicate emails and names in them.                                             
 (2) Copy "Subject:" and "Sent:" headers exactly as in the input.
                                                
-Output format:  
-- Preserve the body until the cut point.  
+Output format:   
 - End the output with:  
-   - If a signature block exists -> sender's name + newline + "End of email"  
+   - If a signature block exists -> sender's name + newline + "End of email" 
    - Otherwise -> newline + "End of email" 
                                                
 Example:
@@ -132,6 +139,8 @@ Cc: Sales Department
 Subject: Upcoming Shipment
 Hello Mary,
 This is to inform you about the upcoming shipment.
+IMPORTANT NOTE: Worldwide situation affects directly the shipping industry
+leading to continuous changes on vessels, and dates of arrivals & departures.
 Thanks and Best regards,
 John Doe
 Export Manager

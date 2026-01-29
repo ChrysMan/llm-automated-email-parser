@@ -9,7 +9,7 @@ from lightrag.llm.openai import openai_complete_if_cache
 
 
 agent_llm = OpenAIChatModel(
-    os.getenv("LLM_AGENT_MODEL", "Qwen/Qwen2.5-3B-Instruct"),
+    os.getenv("LLM_AGENT_MODEL", "Qwen/Qwen2.5-7B-Instruct-GPTQ-Int8"),
     provider = OpenAIProvider(
         base_url=os.getenv("LLM_AGENT_BINDING_HOST"), 
         api_key=os.getenv("LLM_AGENT_BINDING_API_KEY")

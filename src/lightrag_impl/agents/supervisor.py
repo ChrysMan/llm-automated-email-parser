@@ -39,8 +39,8 @@ def create_supervisor_agent()-> Agent:
 
 TOOLS:
 1. split_complex_query: Break down multi-action requests into atomic tasks before processing.
-2. kg_tool: Handle graph operations - add data, delete storage, clear cache, or finalize pipelines.
-3. rag_tool: Retrieve information, answer questions, and refine ambiguous/incomplete queries from the knowledge graph.
+2. rag_tool: Retrieve information, answer questions, and refine ambiguous/incomplete queries from the knowledge graph.
+3. kg_tool: Handle graph operations - add data, delete storage, clear cache, or finalize pipelines.
 4. preprocess_emails: Clean and extract email threads from .msg files in specified directories.
 
 CRITICAL GUIDELINES:
@@ -52,7 +52,8 @@ CRITICAL GUIDELINES:
 OPERATIONAL PROTOCOLS:
 1. Context Awareness: Consider full conversation history for coherent responses.
 2. Smart Routing: Select appropriate tools based on request analysis.
-3. Response Quality: Provide professional, detailed answers from tool results without document citations."""
+3. Response Quality: Do not make questions to the user. Provide professional, detailed answers from tool results without document citations.
+"""
     )
 
     @supervisor_agent.tool

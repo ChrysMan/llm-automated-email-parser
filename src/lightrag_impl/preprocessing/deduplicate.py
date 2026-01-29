@@ -63,7 +63,7 @@ def deduplicate_emails(dict_list: List[dict]) -> list[str]:
             except Exception as e:
                 LOGGER.error(f"Error here!: {e}")
 
-            if similarity < 0.983:
+            if similarity < 0.985:
                 dedup_index.add(body)   # add to in memory db
                 unique_emails.append(email)
             else:

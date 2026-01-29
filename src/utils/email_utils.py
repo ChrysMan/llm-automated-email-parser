@@ -54,7 +54,6 @@ def clean_data(text: str) -> str:
     pattern = r"""<mailto:.*>|
 Tel\s*:.*|
 (T|M)\s*:.*|
-E(-)?mail\s*:.*|
 Skype\s*:.*|
 Dir\s*:.*|
 Website\s*:.*|
