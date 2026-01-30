@@ -51,22 +51,15 @@ def clean_data(text: str) -> str:
 # Office\s*:.*|
 # Phone\s*:.*|
 # P\.*s\.*\s*:.*$|
+# https?://\S+|<https?://\S+>|                  
+# www\.\S+\s+<https?://\S+>|                     
+# www\.[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}|
     pattern = r"""<mailto:.*>|
-Tel\s*:.*|
 (T|M)\s*:.*|
+(T|M)\s\+.*|
 Skype\s*:.*|
-Dir\s*:.*|
-Website\s*:.*|
-Web\s*:.*|
-Fax\s*:.*|
-mob\..*|
-Mobile\s*:.*|
-Office\s*:.*|
-Phone\s*:.*|
 P\.*s\.*\s*:.*$|
-https?://\S+|<https?://\S+>|                  
-www\.\S+\s+<https?://\S+>|                     
-www\.[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}|
+https?://\S+|<https?://\S+>|   
 Disclaimer\s*:.*|
 Στάλθηκε από το Ταχυδρομείο.*|
 Sent from my.*|

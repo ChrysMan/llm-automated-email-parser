@@ -12,12 +12,12 @@ from utils.logging import LOGGER
 
 load_dotenv()
 
-if os.getenv("LANGSMITH_API_KEY"):
-    os.environ["LANGCHAIN_TRACING_V2"] = "true"
-    os.environ["LANGCHAIN_ENDPOINT"]="https://api.smith.langchain.com"
-    os.environ["LANGSMITH_PROJECT"] = "rag_agent"
-else:
-    LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
+# if os.getenv("LANGSMITH_API_KEY"):
+#     os.environ["LANGCHAIN_TRACING_V2"] = "true"
+#     os.environ["LANGCHAIN_ENDPOINT"]="https://api.smith.langchain.com"
+#     os.environ["LANGSMITH_PROJECT"] = "rag_agent"
+# else:
+#     LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
 
 
 class RefinedQueries(BaseModel):

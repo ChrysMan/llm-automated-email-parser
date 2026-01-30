@@ -15,9 +15,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-if os.getenv("LANGSMITH_API_KEY"):
-    os.environ["LANGCHAIN_TRACING_V2"] = "true"
-    os.environ["LANGCHAIN_PROJECT"] = "supervisor_agent"
+# if os.getenv("LANGSMITH_API_KEY"):
+#     os.environ["LANGCHAIN_TRACING_V2"] = "true"
+#     os.environ["LANGCHAIN_PROJECT"] = "supervisor_agent"
 
 MAX_HISTORY_LENGTH = 4
 

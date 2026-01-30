@@ -13,12 +13,12 @@ from utils.file_io import find_file, read_json_file
 
 load_dotenv()
 
-if os.getenv("LANGSMITH_API_KEY"):
-    os.environ["LANGCHAIN_TRACING_V2"] = "true"
-    os.environ["LANGCHAIN_ENDPOINT"]="https://api.smith.langchain.com"
-    os.environ["LANGSMITH_PROJECT"] = "kg_agent"
-else:
-    LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
+# if os.getenv("LANGSMITH_API_KEY"):
+#     os.environ["LANGCHAIN_TRACING_V2"] = "true"
+#     os.environ["LANGCHAIN_ENDPOINT"]="https://api.smith.langchain.com"
+#     os.environ["LANGSMITH_PROJECT"] = "kg_agent"
+# else:
+#     LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
 
 WORKING_DIR = "lightrag_impl/core/rag_storage"
 

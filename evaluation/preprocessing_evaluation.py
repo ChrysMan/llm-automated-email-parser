@@ -7,15 +7,10 @@ from datetime import datetime
 
 from ragas.metrics.collections import (
     ExactMatch,
-    FactualCorrectness,
-    SemanticSimilarity,
     CHRFScore,
-    NonLLMStringSimilarity,
-    DistanceMeasure
 )
-from google import genai
-from ragas.llms import llm_factory
-from ragas.embeddings import GoogleEmbeddings
+
+from NLIE_evaluator import NLIEvaluator
 #from ..src.utils.file_io import read_json_file
 
 from dotenv import load_dotenv
@@ -30,25 +25,13 @@ class PreprocessingEvaluator:
     Full-file evaluation of preprocessing using RAGAS metrics only.
     """
 
-    def __init__(self, alignment_threshold: float = 0.7):
-        eval_model = os.getenv("EVAL_LLM_MODEL", "gpt-4o-mini")
-        eval_embedding_model = os.getenv("EVAL_EMBEDDING_MODEL")
-        
-        client = genai.Client(api_key=os.environ.get("EVAL_LLM_BINDING_API_KEY"))
-        
-        self.eval_embeddings = GoogleEmbeddings(client=client, model=eval_embedding_model)
-        
-        self.eval_llm = llm_factory(eval_model, provider="google", client=client)
-
+    def __init__(self, alignment_threshold: float = 0.80):
         self.alignment_threshold = alignment_threshold
 
         # RAGAS metrics
         self.exact_match = ExactMatch()
-        self.factual = FactualCorrectness(llm=self.eval_llm)
-        self.semantic = SemanticSimilarity(embeddings=self.eval_embeddings)
+        self.nli_evaluator = NLIEvaluator()
         self.chrf = CHRFScore()
-        # self.string_sim = NonLLMStringSimilarity(distance_measure=DistanceMeasure.LEVENSHTEIN)
-
 
     def _align_emails(self, predicted: List[dict], ground_truth: List[dict]) -> Dict[int, Optional[int]]:
         """
@@ -84,13 +67,25 @@ class PreprocessingEvaluator:
         fields = ["from", "to", "cc", "subject"]
         scores = []
 
-        scores = [self.exact_match(response=pr[f], reference=gt[f]) for f in fields]
+        scores = [self.exact_match.score(response=pr[f], reference=gt[f]) for f in fields]
         
         return float(np.mean(scores)) if scores else 0.0
     
-    # -------------------------
-    # Content & formatting
-    # -------------------------
+    def evaluate_content(self, predicted: Dict, ground_truth: Dict, alignment):
+        scores = defaultdict(list)
+        for p_idx, g_idx in alignment.items():
+            if g_idx is None: continue
+            
+            p_body = predicted[p_idx]["body"]
+            g_body = ground_truth[g_idx]["body"]
+
+            nli_score = self.nli_evaluator.compute_score(p_body, g_body)
+            scores["nli_integrity"].append(nli_score)
+            
+            scores["chrf_score"].append(self.chrf.score(p_body, g_body))
+    
+        return {k: float(np.mean(v)) if v else 0.0 for k, v in scores.items()}
+    
     def evaluate_content(
         self,
         predicted: List[dict],
@@ -110,11 +105,11 @@ class PreprocessingEvaluator:
             scores["exact_match"].append(
                 self.evaluate_headers(p, g)
             )
-            scores["factual_correctness"].append(
-                self.factual.score(response=p["body"], reference=g["body"])
+            scores["chrf_score"].append(
+                self.chrf.score(response=p["body"], reference=g["body"])
             )
-            scores["string_similarity"].append(
-                self.semantic.score(response=p["body"], reference=g["body"])
+            scores["nli_integrity"].append(
+                self.nli_evaluator.compute_score(response=p["body"], reference=g["body"])
             )
 
         return {
@@ -186,10 +181,10 @@ class PreprocessingEvaluator:
             )
         )
 
-        meaning = np.mean([
-            results.get("factual_correctness", 0.0),
-            results.get("semantic_similarity", 0.0),
-        ])
+        meaning = (
+            0.20 * results.get("chrf_score", 0.0)+
+            0.80 * results.get("nli_integrity", 0.0)
+        )
 
         overall = (
             0.45 * meaning +
@@ -214,7 +209,20 @@ def main():
             predictions = json.load(f)
     with open("/home/chryssida/DATA_TUC-KRITI/TRUCK EXPORT/244037/244037_gt.json", "r", encoding="utf-8") as f:
             ground_truth = json.load(f)
-    #ground_truth = read_json_file("/home/chryssida/DATA_TUC-KRITI/TRUCK EXPORT/244037/244037_gt.json")
+    try:
+        results = evaluator.evaluate(predictions, ground_truth)
+
+        with open(json_path, "w") as f:
+            json.dump(results, f, indent=2)
+
+        print("Success")
+    except Exception as e:
+        print(f"Error: {e}")
+
+    with open("/home/chryssida/DATA_TUC-KRITI/TRUCK IMPORT/240487/240487_unique.json", "r", encoding="utf-8") as f:
+            predictions = json.load(f)
+    with open("/home/chryssida/DATA_TUC-KRITI/TRUCK IMPORT/240487/240487_gt.json", "r", encoding="utf-8") as f:
+            ground_truth = json.load(f)
     try:
         results = evaluator.evaluate(predictions, ground_truth)
 

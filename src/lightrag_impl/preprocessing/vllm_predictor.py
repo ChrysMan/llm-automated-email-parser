@@ -13,13 +13,13 @@ from ..prompts.preprocessing_prompts import cleaning_prompt, formatter_and_trans
 
 load_dotenv()
 
-langsmith_api_key = os.getenv("LANGSMITH_API_KEY")
-if langsmith_api_key:
-    os.environ["LANGCHAIN_TRACING_V2"] = "true"
-    os.environ["LANGCHAIN_ENDPOINT"]="https://api.smith.langchain.com"
-    os.environ["LANGSMITH_PROJECT"] = "email_preprocessing"
-else:
-    LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
+# langsmith_api_key = os.getenv("LANGSMITH_API_KEY")
+# if langsmith_api_key:
+#     os.environ["LANGCHAIN_TRACING_V2"] = "true"
+#     os.environ["LANGCHAIN_ENDPOINT"]="https://api.smith.langchain.com"
+#     os.environ["LANGSMITH_PROJECT"] = "email_preprocessing"
+# else:
+#     LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
 
 class LLMPredictor:
 

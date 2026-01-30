@@ -19,21 +19,22 @@ You have to follow the tasks sequencially. The output of every task will be the 
 Task 1: Translate every non-English segment into proper natural English words. If everything is in English proceed to the next task. 
     Translation Rules:
     1. Do not modify text that is already in English. 
-    2. Do not use transliteration. For example "Δευτέρα" becomes "Monday", not "Deutera".  
-    3. Translate words in a way that is appropriate for the context of **commercial shipping, cargo logistics, and freight operations**.
+    2. Do not use transliteration. For example "Δευτέρα" becomes "Monday", not "Deutera".   
+    4. Translate words in a way that is appropriate for the context of **commercial shipping, cargo logistics, and freight operations**. 
                                                                                                               
 Task 2: Reformat email headers into a standardized structure while preserving the email text **exactly** as it appears in the input.
     Formatting Rules: 
     1. Format headers into the following fields (in this exact order):
-        - From: + sender (exactly as in input)
+        - From: + sender (Exactly as in input)
         - Sent: + date/time converted into English format -> Full weekday name, full month name day, four-digit year, hour:minute:second AM/PM. Do not change the actual date/time values, only reformat them. "πμ" becomes "AM", "μμ" becomes "PM".
-        - To: + recipients (leave blank if not specified)
-        - Cc: + recipients (leave blank if not specified)
-        - Subject: + subject text (stop reading subject after the newline; leave blank if not specified)
-        - In a newline copy the entire body text after the subject line exactly as in the input (preserve all line breaks, spaces, punctuation).                                                                
+        - To: + recipients (Leave *blank* if not specified. If it specified it must copied exactly as in input)
+        - Cc: + recipients (Leave *blank* if not specified. If it specified it must copied exactly as in input)
+        - Subject: + subject text (Stop reading subject after the newline; leave blank if not specified)
+        - In a newline copy the entire body text after the subject line exactly as in the input (Preserve all line breaks, spaces, punctuation).                                                                
 
 Output format:
-   - The output must always start with "From:" and end with newline + "End of email".    
+  - Preserve the formatting (e.g. whitespace, newlines etc) 
+  - The output must always start with "From:" and end with newline + "End of email".    
 
 Example 1:
 Input: 
@@ -78,7 +79,7 @@ This email has been scanned by XYZ AntiVirus.
 
 Output:
 From:  John Doe 
-Sent: Friday, December 29, 2023 22:00 PM
+Sent: Friday, December 29, 2023 10:00 PM
 To: 'Nefeli Joe'; Zoi Papa <harapap@gmail.com>
 Cc: Mary Joe; harapap@gmail.com; Kate Doe <katedoe@example.com> 
 Subject: Offer for Dubai // ARIAN
@@ -114,18 +115,19 @@ Rules for task 1:
 (1) After the sender’s name, keep only the following lines, in order, if they exist:
   -Job title or role
   -Company or organization name
-Delete all lines after these.
-(2) Remove clearly irrelevant trailing content (e.g. disclaimers, disclaimer-like notes, boilerplate, antivirus notices, footers, device signatures), and preserve all meaningful email body text.
+Delete all other lines after the sender's name that does not match this description.
+(2) Remove clearly irrelevant trailing content (e.g. disclaimers, any kind of notes, boilerplate, antivirus notices, footers, device signatures, clearly irrelevant trailing text), and preserve all meaningful email body text.
 (3) Do not invent, rewrite, or add content. Preserve all spacing, line breaks, punctuation, and formatting exactly as in the input.  
 
 Rules for task 2:                             
 (1) Process the fields "From:", "To:", "Cc:"  sequentially, using the following rules in order:
-    - Remove the duplicate emails and names from the contacts.                                                     
-    - Remove apostrophes (" or ') from the contacts.
-    - Do not remove any contacts, only duplicate emails and names in them.                                             
+    - Each field may contain more than one contacts seperated with a ';'. For each contact remove the duplicate emails and names.                                                     
+    - Remove apostrophes (" or ') from the contacts.      
+    - If a field is blank, leave it blank.                                       
 (2) Copy "Subject:" and "Sent:" headers exactly as in the input.
                                                
-Output format:   
+Output format: 
+- Preserve the formatting (e.g. whitespace, newlines etc)  
 - End the output with:  
    - If a signature block exists -> sender's name + newline + "End of email" 
    - Otherwise -> newline + "End of email" 
@@ -135,7 +137,7 @@ Input:
 From: johndoe@email.gr
 Sent: Friday, December 29, 2023 22:00 PM
 To: Mary Joe/Ms. "Mary Joe"; harapap@gmail.com <harapap@gmail.com>; 'Kate Doe' <katedoe@example.com> 
-Cc: Sales Department
+Cc: Sales Department; Kate Doe 
 Subject: Upcoming Shipment
 Hello Mary,
 This is to inform you about the upcoming shipment.
@@ -158,7 +160,7 @@ Output:
 From: johndoe@email.gr
 Sent: Friday, December 29, 2023 22:00 PM
 To: Mary Joe; harapap@gmail.com; Kate Doe <katedoe@example.com> 
-Cc: Sales Department
+Cc: Sales Department; Kate Doe
 Subject: Upcoming Shipment
 Hello Mary,
 This is to inform you about the upcoming shipment.
