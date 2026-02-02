@@ -54,7 +54,7 @@ def clean_data(text: str) -> str:
 # https?://\S+|<https?://\S+>|                  
 # www\.\S+\s+<https?://\S+>|                     
 # www\.[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}|
-    pattern = r"""<mailto:.*>|
+    pattern = r"""\s*<mailto:[^>]+>|
 (T|M)\s*:.*|
 (T|M)\s\+.*|
 Skype\s*:.*|
@@ -71,8 +71,8 @@ This message is sent from my mob* device"""
     return clean_text
 
 def split_email_thread(clean_text: str) -> list: 
-    """ Separates the emails using the word "From" or "On...wrote:" as an indicator to separate (English, Greek, Chinese, Russian, German, French, Italian, Spanish, Portuguese). """
-    separator = re.compile(r"^(From:|发件人:|De:|Von:|Da:|De:|От:|On .+ wrote:|Στις .+ έγραψε:|在 .+ 写道:|Le .+ a écrit:|Am .+ schrieb:|El .+ escribió:|Il .+ ha scritto:|Em .+ escreveu:|В .+ написал(а)?:)", re.MULTILINE)   
+    """ Separates the emails using the word "From" or "On...wrote:" as an indicator to separate (English, Greek, Israeli, Chinese, Russian, German, French, Italian, Spanish, Portuguese). """
+    separator = re.compile(r"^(From:|Από:|מאת:|发件人:|De:|Von:|Da:|De:|От:|On .+ wrote:|Στις .+ έγραψε:|在 .+ 写道:|Le .+ a écrit:|Am .+ schrieb:|El .+ escribió:|Il .+ ha scritto:|Em .+ escreveu:|В .+ написал(а)?:)", re.MULTILINE)   
     
     # Find all occurrences of reply headers
     matches = list(separator.finditer(clean_text))

@@ -11,34 +11,33 @@ class EmailInfo(BaseModel):
     subject: Optional[str] = Field(None, description="The subject of the email.")
     body: str = Field(..., description="The email body")
 
-
 formatter_and_translator_prompt = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
 You are an email cleaning agent. Consistency and strict adherence to rules are critical.
 You have to follow the tasks sequencially. The output of every task will be the input to the next task.                                         
 
 Task 1: Translate every non-English segment into proper natural English words. If everything is in English proceed to the next task. 
-    Translation Rules:
-    1. Do not modify text that is already in English. 
-    2. Do not use transliteration. For example "Δευτέρα" becomes "Monday", not "Deutera".   
-    4. Translate words in a way that is appropriate for the context of **commercial shipping, cargo logistics, and freight operations**. 
+    Constraints:
+    1. Do NOT modify text that is already in English. 
+    2. Transliteration is strictly limited to names and acronyms that are not meridiem indicators. For example "ΟΛΠ" -> "OLP" but "Δευτέρα" -> "Monday" (not "Deutera") and "π.μ." -> "AM" (not "PM").   
+    3. Preserve the original writing style exactly.Do not grammatically correct or modify the text in any way except for translation.
+    4. Translate words in a way that is appropriate for the context of **commercial shipping, cargo logistics, and freight operations**.
                                                                                                               
 Task 2: Reformat email headers into a standardized structure while preserving the email text **exactly** as it appears in the input.
-    Formatting Rules: 
+    Constraints: 
     1. Format headers into the following fields (in this exact order):
-        - From: + sender (Exactly as in input)
+        - From: + sender -> Exactly as in input
         - Sent: + date/time converted into English format -> Full weekday name, full month name day, four-digit year, hour:minute:second AM/PM. Do not change the actual date/time values, only reformat them. "πμ" becomes "AM", "μμ" becomes "PM".
-        - To: + recipients (Leave *blank* if not specified. If it specified it must copied exactly as in input)
-        - Cc: + recipients (Leave *blank* if not specified. If it specified it must copied exactly as in input)
-        - Subject: + subject text (Stop reading subject after the newline; leave blank if not specified)
-        - In a newline copy the entire body text after the subject line exactly as in the input (Preserve all line breaks, spaces, punctuation).                                                                
+        - To: + recipients -> Leave *blank* if not specified. If it specified it must be copied exactly as in input
+        - Cc: + recipients -> Leave *blank* if not specified. If it specified it must be copied exactly as in input
+        - Subject: + subject text -> Stop reading subject after the newline; leave blank if not specified
+        - In a newline copy the entire body text after the subject line exactly as in the input.                                                                
 
 Output format:
-  - Preserve the formatting (e.g. whitespace, newlines etc) 
   - The output must always start with "From:" and end with newline + "End of email".    
 
 Example 1:
 Input: 
-On May 30, 2023, at 11:23, Maria Doe wrote:
+Στις Τρί 30 Μαϊου 2023 στις 11:23 πμ, ο/η Maria Doe έγραψε:
 Καλημέρα κ. Μανουδάκη,
 Λάβαμε μια ενημέρωση σχετικά με μια νέα αποστολή στις 12:00 μ.μ.
 Note: Το γραφείο θα είναι κλειστό στις 28 Οκτωβρίου.
@@ -111,23 +110,23 @@ You are an email cleaning agent. You have two tasks:
 1. Remove irrelevant text from the end of the email body      
 2. Remove duplicates and apostrophes (" or ') from the contacts in the headers.     
 
-Rules for task 1:
+Constraints for task 1:
 (1) After the sender’s name, keep only the following lines, in order, if they exist:
   -Job title or role
   -Company or organization name
 Delete all other lines after the sender's name that does not match this description.
 (2) Remove clearly irrelevant trailing content (e.g. disclaimers, any kind of notes, boilerplate, antivirus notices, footers, device signatures, clearly irrelevant trailing text), and preserve all meaningful email body text.
-(3) Do not invent, rewrite, or add content. Preserve all spacing, line breaks, punctuation, and formatting exactly as in the input.  
+(3) Do NOT invent, rewrite, correct or add content in any part of the email. 
 
-Rules for task 2:                             
+Constraints for task 2:                             
 (1) Process the fields "From:", "To:", "Cc:"  sequentially, using the following rules in order:
-    - Each field may contain more than one contacts seperated with a ';'. For each contact remove the duplicate emails and names.                                                     
+    - For each contact remove the duplicate emails and names.                                              
     - Remove apostrophes (" or ') from the contacts.      
-    - If a field is blank, leave it blank.                                       
-(2) Copy "Subject:" and "Sent:" headers exactly as in the input.
+    - If a field is blank, leave it blank.                                      
+(2) Copy "Subject:" and "Sent:" headers exactly as in the input. 
                                                
 Output format: 
-- Preserve the formatting (e.g. whitespace, newlines etc)  
+- The output must always start with "From:".
 - End the output with:  
    - If a signature block exists -> sender's name + newline + "End of email" 
    - Otherwise -> newline + "End of email" 

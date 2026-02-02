@@ -52,7 +52,7 @@ CRITICAL GUIDELINES:
 OPERATIONAL PROTOCOLS:
 1. Context Awareness: Consider full conversation history for coherent responses.
 2. Smart Routing: Select appropriate tools based on request analysis.
-3. Response Quality: Do not make questions to the user. Provide professional, detailed answers from tool results without document citations.
+3. Response Quality: Do not make questions to the user. Provide professional, detailed answers strictly based on tool results. Answer only what is explicitly asked. Do not include citations or additional information.
 """
     )
 

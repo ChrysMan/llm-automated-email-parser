@@ -83,9 +83,9 @@ async def run_async_query(rag: LightRAG, question: str, mode: str) -> str:
             mode=mode, 
             enable_rerank=True, 
             include_references=True,
-            user_prompt="""PROJECT INTEGRITY PROTOCOL: Each entity in the knowledge graph is linked to a specific Project ID. This identifier appears in email subjects and entity descriptions.
+            #user_prompt="""PROJECT INTEGRITY PROTOCOL: Each entity in the knowledge graph is linked to a specific Project ID. This identifier appears in email subjects and entity descriptions.
 
-QUERY GUIDANCE: When responding to project-specific questions, filter results to include ONLY entities and context chunks matching the specified project reference number. This ensures accurate, project-isolated responses and prevents cross-contamination between different projects. Never use information from chunks or entities outside the specified project scope."""
+#QUERY GUIDANCE: When responding to project-specific questions, filter results to include ONLY entities and context chunks matching the specified project reference number. This ensures accurate, project-isolated responses and prevents cross-contamination between different projects. Never use information from chunks or entities outside the specified project scope."""
         )
     )
 
