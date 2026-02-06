@@ -32,14 +32,14 @@ class LLMPredictor:
             trust_remote_code=True,
             enforce_eager=True,
             dtype='float16',
-            gpu_memory_utilization=0.9,
+            gpu_memory_utilization=0.8,
             max_num_seqs=20,    #maximum number of active sequences (parallel inferences)
-            max_model_len=4096
+            max_model_len=8192
         )
 
         self.sampling_params = SamplingParams(
             temperature=0,
-            max_tokens=2048,
+            max_tokens=4096,
             stop="End of email",
             detokenize=True
         )
@@ -68,7 +68,7 @@ class LLMPredictor:
 def main():
     tic1 = time()
     if len(sys.argv) != 2:
-        LOGGER.error("Usage: python emailParsing.py <dir_path>")
+        LOGGER.error("Usage: python vllm.py <dir_path>")
         sys.exit(1)
 
     dir_path = sys.argv[1]
@@ -78,7 +78,7 @@ def main():
 
     folder_name = os.path.basename(os.path.normpath(dir_path))
 
-    output_path = os.path.join(dir_path, f"{folder_name}.json")
+    output_path = os.path.join(dir_path, f"{folder_name}_vllm.json")
 
     predictor = LLMPredictor()
 

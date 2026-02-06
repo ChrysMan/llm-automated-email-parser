@@ -6,7 +6,7 @@ from email import message_from_string
 from langchain_core.output_parsers import JsonOutputParser
 from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig
 
-from lightrag_impl.prompts.preprocessing_prompts import EmailInfo, overall_cleaning_prompt
+from lightrag_impl.prompts.preprocessing_prompts import EmailInfo, cleaning_prompt, formatter_and_translator_prompt
 from utils.email_utils import extract_msg_file, clean_data, split_email_thread
 from utils.logging import LOGGER
 
@@ -41,7 +41,7 @@ def clean_email_llm(email_text:str, prompt, model:AutoModelForCausalLM, tokenize
             # Tokenize
             input = tokenizer(prompt_text, return_tensors="pt").to('cuda')
 
-            assert input['input_ids'].max() < model.config.vocab_size, f"Token ID exceeds model vocab size: {input['input_ids'].max()}, {model.config.vocab_size}"
+            #assert input['input_ids'].max() < model.config.vocab_size, f"Token ID exceeds model vocab size: {input['input_ids'].max()}, {model.config.vocab_size}"
 
             tokenizer.eos_token = "<|endoftext|>"
 
@@ -84,7 +84,7 @@ def extract_email_llm(email_text: str, prompt, model:AutoModelForCausalLM, token
             prompt_text = prompt.format(email=email_text)
             
             # Tokenize
-            input = tokenizer(prompt_text, return_tensors="pt").to(device)
+            input = tokenizer(prompt_text, return_tensors="pt")#.to(device)
             
             # Generate the email information
             generated = model.generate(
@@ -120,11 +120,9 @@ def extract_email_llm(email_text: str, prompt, model:AutoModelForCausalLM, token
 if __name__ == "__main__":
 
     tic1 = time()
-
-    #hf_token = os.getenv("HF_TOKEN")
     
     if len(sys.argv) != 2:
-        LOGGER.error("Usage: python emailParsing.py <dir_path>")
+        LOGGER.error("Usage: python sync.py <dir_path>")
         sys.exit(1)
 
     dir_path = sys.argv[1]
@@ -134,29 +132,29 @@ if __name__ == "__main__":
 
     folder_name = os.path.basename(os.path.normpath(dir_path))
 
-    output_path = os.path.join(dir_path, f"{folder_name}.json")
+    output_path = os.path.join(dir_path, f"{folder_name}_sync.json")
 
     #model_tag = "meta-llama/Llama-3.1-8B-Instruct"
+    #model_name = "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8"
     model_name = "Qwen/Qwen2.5-14B-Instruct"
     #model_name2 = "LuvU4ever/qwen2.5-3b-qlora-merged-v4"
 
-    if torch.cuda.is_available():
-        num_gpus = torch.cuda.device_count()
-        device0 = "cuda:0" if num_gpus > 1 else "cuda:0"
-        device1 = "cuda:2" if num_gpus > 2 else "cuda:0"
-    else:
-        device0 = device1 = "cpu"
+    # if torch.cuda.is_available():
+    #     num_gpus = torch.cuda.device_count()
+    #     device0 = "cuda:0" if num_gpus > 1 else "cuda:0"
+    #     device1 = "cuda:1" if num_gpus > 2 else "cuda:0"
+    # else:
+    #     device0 = device1 = "cpu"
     
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         dtype=torch.float16,
         attn_implementation="sdpa",
-        device_map="auto",
-        max_memory={
-            1: "16GB",  # allow GPU 0
-            2: "16GB",   # allow GPU 1
-            3: "16GB"    # allow GPU 2
-        }
+        device_map="auto"
+        # max_memory={
+        #     0: "12GiB",  # allow GPU 0
+        #     1: "12GiB"  # allow GPU 1
+        # }
     )#.to(device0)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -186,7 +184,8 @@ if __name__ == "__main__":
                 for email in splitted_emails:
                     count += 1
                     
-                    cleaned_email = clean_email_llm(email, prompt=overall_cleaning_prompt, model=model, tokenizer=tokenizer, trace_name=f"clean_email_{filename}_{count}")
+                    form_trans_email = clean_email_llm(email, prompt=formatter_and_translator_prompt, model=model, tokenizer=tokenizer, trace_name=f"clean_email_{filename}_{count}")
+                    cleaned_email = clean_email_llm(form_trans_email, prompt=cleaning_prompt, model=model, tokenizer=tokenizer, trace_name=f"clean_email_{filename}_{count}")
                     # formatted_email = clean_email_llm(email, prompt=formatting_headers_prompt, model=model, tokenizer=tokenizer, trace_name=f"format_email_headers_{filename}_{count}", device=device0)
                     # translated_email = clean_email_llm(formatted_email, prompt=translator_prompt_template, model=model, tokenizer=tokenizer, trace_name=f"translate_{filename}_{count}", device=device0)
                     # cleaned_from_signatures_headers = clean_email_llm(translated_email, prompt=cleaning_prompt, model=model, tokenizer=tokenizer, trace_name=f"clean_email_{filename}_{count}", device=device0)

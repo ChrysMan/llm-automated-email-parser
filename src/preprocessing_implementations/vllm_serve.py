@@ -25,7 +25,7 @@ class LLMPredictor:
 
     def __init__(self):
         self.client = OpenAI(
-            base_url=os.getenv("LLM_BINDING_HOST"),
+            base_url="http://localhost:8002/v1",#os.getenv("LLM_BINDING_HOST"),
             api_key=os.getenv("LLM_BINDING_API_KEY"),
             max_retries=3
         )
@@ -37,7 +37,7 @@ class LLMPredictor:
             model=os.getenv("LLM_MODEL", "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8"),
             prompt=prompt,
             temperature=0,
-            max_tokens=8192,
+            max_tokens=4096,
             stop="End of email"
         )
 
@@ -81,7 +81,7 @@ def main():
 
     folder_name = os.path.basename(os.path.normpath(dir_path))
 
-    output_path = os.path.join(dir_path, f"{folder_name}.json")
+    output_path = os.path.join(dir_path, f"{folder_name}_vllm_serve.json")
 
     predictor = LLMPredictor()
 

@@ -229,21 +229,20 @@ def main():
     
     evaluator = PreprocessingEvaluator()
 
-    with open("/home/chryssida/DATA_TUC-KRITI/TRUCK EXPORT/244037/244037_unique.json", "r", encoding="utf-8") as f:
+    with open("/home/chryssida/DATA_TUC-KRITI/SEA EXPORT/232610/232610_unique_4pr-2.json", "r", encoding="utf-8") as f:
             predictions = json.load(f)
-    with open("/home/chryssida/DATA_TUC-KRITI/TRUCK EXPORT/244037/244037_gt.json", "r", encoding="utf-8") as f:
+    with open("/home/chryssida/DATA_TUC-KRITI/SEA EXPORT/232610/232610_gt.json", "r", encoding="utf-8") as f:
             ground_truth = json.load(f)
     try:
         results = evaluator.evaluate(predictions, ground_truth)
 
         with open(json_path, "w") as f:
             json.dump(results, f, indent=2)
-
         print("Success")
     except Exception as e:
         print(f"Error: {e}")
 
-    with open("/home/chryssida/DATA_TUC-KRITI/TRUCK IMPORT/240487/240487_unique.json", "r", encoding="utf-8") as f:
+    with open("/home/chryssida/DATA_TUC-KRITI/TRUCK IMPORT/240487/240487_unique_4pr-2.json", "r", encoding="utf-8") as f:
             predictions = json.load(f)
     with open("/home/chryssida/DATA_TUC-KRITI/TRUCK IMPORT/240487/240487_gt.json", "r", encoding="utf-8") as f:
             ground_truth = json.load(f)
@@ -257,9 +256,10 @@ def main():
     except Exception as e:
         print(f"Error: {e}")
 
-    with open("/home/chryssida/DATA_TUC-KRITI/SEA EXPORT/232610/232610_unique.json", "r", encoding="utf-8") as f:
+
+    with open("/home/chryssida/DATA_TUC-KRITI/TRUCK EXPORT/244037/244037_unique_4pr-2.json", "r", encoding="utf-8") as f:
             predictions = json.load(f)
-    with open("/home/chryssida/DATA_TUC-KRITI/SEA EXPORT/232610/232610_gt.json", "r", encoding="utf-8") as f:
+    with open("/home/chryssida/DATA_TUC-KRITI/TRUCK EXPORT/244037/244037_gt.json", "r", encoding="utf-8") as f:
             ground_truth = json.load(f)
     try:
         results = evaluator.evaluate(predictions, ground_truth)
@@ -270,6 +270,8 @@ def main():
         print("Success")
     except Exception as e:
         print(f"Error: {e}")
+
+    
         
     
 if __name__ == "__main__":

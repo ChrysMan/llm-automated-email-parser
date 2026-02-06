@@ -38,7 +38,7 @@ class LLMPredictor:
             model=self.model,
             prompt=prompt,
             temperature=0,
-            max_tokens=2048,
+            max_tokens=4096,
             stop="End of email"
         )
 
