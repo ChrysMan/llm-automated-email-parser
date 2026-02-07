@@ -5,6 +5,7 @@ from lightrag.lightrag import LightRAG, QueryParam
 from lightrag.llm.ollama import ollama_embed
 from lightrag.utils import EmbeddingFunc
 from lightrag.kg.shared_storage import initialize_share_data, initialize_pipeline_status
+from typing import Any
 
 from ..core.llm import llm_model_func, rerunk_func
 from utils.file_io import read_json_file
@@ -73,20 +74,32 @@ async def index_data(rag: LightRAG, dir_path: str)-> str:
     # deepseek modelo
 
 
-async def run_async_query(rag: LightRAG, question: str, mode: str) -> str:
+async def run_async_query(rag: LightRAG, question: str, mode: str) -> dict[str, Any]:
     """
     Execute an async RAG query using .aquery method 
     """
-    return await rag.aquery(
+    response = await rag.aquery_llm(
         query=question,
         param=QueryParam(
             mode=mode, 
             enable_rerank=True, 
             include_references=True,
-            #user_prompt="""PROJECT INTEGRITY PROTOCOL: Each entity in the knowledge graph is linked to a specific Project ID. This identifier appears in email subjects and entity descriptions.
+            user_prompt="""Ensure the response remains exclusively focused on the specific question asked; 
+            avoid providing peripheral context, unsolicited advice, or any information not directly required to answer the query."""
 
-#QUERY GUIDANCE: When responding to project-specific questions, filter results to include ONLY entities and context chunks matching the specified project reference number. This ensures accurate, project-isolated responses and prevents cross-contamination between different projects. Never use information from chunks or entities outside the specified project scope."""
         )
     )
+    # Used for evaluation
+    if 'data' in response:
+        for d in response.get('data', {}).get('entities', []):
+            d.pop("source_id", None)
+            d.pop("created_at", None)
+        for d in response.get('data', {}).get('relationships', []):
+            d.pop("source_id", None)
+            d.pop("created_at", None)
+
+    print(f"[_build_query_context] Raw data entities: {response.get('data', {}).get('entities', [])}, relationships: {response.get('data', {}).get('relationships', [])}, chunks: {response.get('data', {}).get('chunks', [])}")
+
+    return response
 
         

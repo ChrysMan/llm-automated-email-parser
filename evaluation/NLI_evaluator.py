@@ -16,7 +16,4 @@ class NLIEvaluator:
         neutral_prob = probabilities[2]         # Rephrased info: Measures the neutrality of the rephrase.
 
         raw_score = entailment_prob + 0.5 * neutral_prob
-        #print(f"entailment: {entailment_prob}, neutral: {neutral_prob}, contradiction: {contradiction_prob}, raw_score: {raw_score}")
-        #final_score = raw_score / 1.5
-        print("\nfinal_score:", raw_score)
         return max(0.0, min(1.0, float(raw_score)))

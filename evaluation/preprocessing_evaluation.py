@@ -139,7 +139,7 @@ class PreprocessingEvaluator:
             scores["nli_integrity"].append(
                 self.nli_evaluator.compute_score(response=p["body"], reference=g["body"])
             )
-
+            print(f"\n{p_idx}: exact_match: {scores['exact_match'][-1]}, chrf_score: {scores['chrf_score'][-1]}, nli_integrity: {scores['nli_integrity'][-1]}")
         return {
             k: float(np.mean(v)) if v else 0.0
             for k, v in scores.items()
@@ -229,7 +229,7 @@ def main():
     
     evaluator = PreprocessingEvaluator()
 
-    with open("/home/chryssida/DATA_TUC-KRITI/SEA EXPORT/232610/232610_unique_4pr-2.json", "r", encoding="utf-8") as f:
+    with open("/home/chryssida/DATA_TUC-KRITI/SEA EXPORT/232610/232610_unique_2pr.json", "r", encoding="utf-8") as f:
             predictions = json.load(f)
     with open("/home/chryssida/DATA_TUC-KRITI/SEA EXPORT/232610/232610_gt.json", "r", encoding="utf-8") as f:
             ground_truth = json.load(f)
@@ -242,7 +242,7 @@ def main():
     except Exception as e:
         print(f"Error: {e}")
 
-    with open("/home/chryssida/DATA_TUC-KRITI/TRUCK IMPORT/240487/240487_unique_4pr-2.json", "r", encoding="utf-8") as f:
+    with open("/home/chryssida/DATA_TUC-KRITI/TRUCK IMPORT/240487/240487_unique_2pr.json", "r", encoding="utf-8") as f:
             predictions = json.load(f)
     with open("/home/chryssida/DATA_TUC-KRITI/TRUCK IMPORT/240487/240487_gt.json", "r", encoding="utf-8") as f:
             ground_truth = json.load(f)
@@ -257,7 +257,7 @@ def main():
         print(f"Error: {e}")
 
 
-    with open("/home/chryssida/DATA_TUC-KRITI/TRUCK EXPORT/244037/244037_unique_4pr-2.json", "r", encoding="utf-8") as f:
+    with open("/home/chryssida/DATA_TUC-KRITI/TRUCK EXPORT/244037/244037_unique_2pr.json", "r", encoding="utf-8") as f:
             predictions = json.load(f)
     with open("/home/chryssida/DATA_TUC-KRITI/TRUCK EXPORT/244037/244037_gt.json", "r", encoding="utf-8") as f:
             ground_truth = json.load(f)

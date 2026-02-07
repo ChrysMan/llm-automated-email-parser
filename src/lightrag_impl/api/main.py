@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from typing import List, Optional, Literal
 
 from ..core.llm import ref_llm
-from ..core.pipeline import initialize_rag
+from ..core.pipeline import initialize_rag, run_async_query
 from ..agents.dependencies import AgentDeps
 from ..agents.supervisor import create_supervisor_agent
 from utils.file_io import find_dir
@@ -30,6 +30,10 @@ class ChatOutput(BaseModel):
 
 class QueryRequest(BaseModel):
     query: str
+
+class QueryResponse(BaseModel):
+    answer: str
+    retrieved_contexts: Optional[List[dict]] = None
 
 @app.on_event("startup")
 async def startup_event():
@@ -76,13 +80,16 @@ async def simple_query_endpoint(request_data: QueryRequest):
         raise HTTPException(status_code=503, detail="System not initialized")
 
     try:
-        result = await supervisor_agent.run(
-            query_text,
-            deps=deps,
-            message_history=None,
+        result = await run_async_query(
+            rag=deps.lightrag,
+            question=query_text,
+            mode="mix"
         )
-
-        return ChatOutput(response=result.output)
+        
+        return QueryResponse(
+            answer=result.get("llm_response", {}),
+            retrieved_contexts=result.get("data", [])
+        )
 
     except Exception as ex:
         raise HTTPException(status_code=500, detail=str(ex))

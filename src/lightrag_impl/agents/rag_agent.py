@@ -1,5 +1,6 @@
-import os, asyncio
+import asyncio
 from typing import List
+from lightrag.lightrag import QueryParam
 from pydantic import BaseModel, Field
 from pydantic_ai import RunContext
 from pydantic_ai.agent import Agent
@@ -45,7 +46,8 @@ CRITICAL GUIDELINES:
 2. Query Optimization: Use rephrase_and_refine_query for ambiguous/complex/broad queries instead of asking for clarification.
 3. Sequential Processing: Execute tools sequentially within a single turn when needed to fully answer questions.
 4. Accuracy Focus: Answer only based on retrieved information; clearly state when data is unavailable.
-5. Response Quality: Provide clear, detailed, fact-based responses from tool outputs.
+5. Response Quality: Provide a comprehensive and detailed answer derived strictly from tool outputs. 
+Ensure the response remains exclusively focused on the specific question asked; avoid providing peripheral context, unsolicited advice, or any information not directly required to answer the query.
 
 COMMUNICATION: Maintain professional, secure, and evidence-based responses."""
 )
@@ -63,19 +65,9 @@ async def retrieve(ctx: RunContext[AgentDeps], question: str) -> str:
     Returns:
         str: The retrieved information from the RAG system.
     """
-    # raw_data = await ctx.deps.lightrag.aquery_data(
-    #     query=question,
-    #     param=QueryParam(mode="mix", enable_rerank=True, include_references=True)
-    # )
-    # data_section = raw_data["data"]
-    # chunks = data_section.get("chunks", [])
-    # print("type:", type(chunks))
-    # print("\nCHUNKS:\n")
-    # for c in chunks:
-    #     print(c)
-
     response = await run_async_query(rag = ctx.deps.lightrag, question=question, mode="mix")  
-    return response
+    
+    return response.get("llm_response", {})
 
 @rag_agent.tool
 async def rephrase_and_refine_query(ctx: RunContext[AgentDeps], user_query: str) -> RefinedQueries:

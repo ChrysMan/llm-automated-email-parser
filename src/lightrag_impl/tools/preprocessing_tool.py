@@ -14,7 +14,7 @@ def execute_full_preprocessing(dir_path: str)-> str:
     
     folder_name = os.path.basename(os.path.normpath(dir_path))
     
-    output_path = os.path.join(dir_path, f"{folder_name}_unique_2pr-2.json")
+    output_path = os.path.join(dir_path, f"{folder_name}_unique.json")
 
     predictor = LLMPredictor()
 

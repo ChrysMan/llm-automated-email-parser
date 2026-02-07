@@ -220,7 +220,7 @@ The knowledge base involves transportation projects managed by Arian maritime co
 """
 )                                         
 
-formatter_prompt = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
+translator_prompt = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
 You are an email cleaning agent. Consistency and strict adherence to rules are critical.                                        
 
 Task: Translate every non-English segment into proper natural English words. If everything is in English proceed to the next task. 
@@ -230,7 +230,9 @@ Constraints:
 2. Transliteration is strictly limited to names and acronyms that are not meridiem indicators. For example "ΟΛΠ" -> "OLP" but "Δευτέρα" -> "Monday" (not "Deutera") and "π.μ." -> "AM" (not "PM").   
 3. Preserve the original writing style exactly.Do not grammatically correct or modify the text in any way except for translation.
 4. Translate words in a way that is appropriate for the context of **commercial shipping, cargo logistics, and freight operations**.
-
+5. Do not change the core facts of the email, such as names, dates, times, locations, company names, job titles, technical terms, and any other specific information. Only translate the language while keeping all core facts intact.
+6. Do not change the formatting of the email.
+                                                 
 Output format:
   - The output must always start with "From:" and end with newline + "End of email".    
 
@@ -273,7 +275,7 @@ Process the following email:
 """
 )
 
-translator_prompt = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
+formatter_prompt = PromptTemplate.from_template("""<|start_header_id|>system<|end_header_id|>
 You are an email cleaning agent. Consistency and strict adherence to rules are critical.                                      
                                                                                                        
 Task 2: Reformat email headers into a standardized structure while preserving the email text **exactly** as it appears in the input.
