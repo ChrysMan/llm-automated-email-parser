@@ -84,10 +84,8 @@ async def run_async_query(rag: LightRAG, question: str, mode: str) -> dict[str, 
             mode=mode, 
             enable_rerank=True, 
             include_references=True,
-            user_prompt="""Ensure the response remains exclusively focused on the specific question asked; 
-            avoid providing peripheral context, unsolicited advice, or any information not directly required to answer the query."""
-
-        )
+            user_prompt="""- Provide only the direct answers to the questions based strictly on the provided data, avoiding any unsolicited context or meta-commentary."""
+            )
     )
     # Used for evaluation
     if 'data' in response:
@@ -97,8 +95,14 @@ async def run_async_query(rag: LightRAG, question: str, mode: str) -> dict[str, 
         for d in response.get('data', {}).get('relationships', []):
             d.pop("source_id", None)
             d.pop("created_at", None)
-
-    print(f"[_build_query_context] Raw data entities: {response.get('data', {}).get('entities', [])}, relationships: {response.get('data', {}).get('relationships', [])}, chunks: {response.get('data', {}).get('chunks', [])}")
+            d.pop("keywords", None)
+            d.pop("weight", None)
+        for d in response.get('data', {}).get('chunks', []):
+            d.pop("chunk_id", None)
+            d.pop("reference_id", None)
+    
+    # print(f"\n\n[run_async_query] RAG response llm_response: {response.get('llm_response', '')}")
+    # print(f"[_build_query_context] Raw data entities: {response.get('data', {}).get('entities', [])}, relationships: {response.get('data', {}).get('relationships', [])}, chunks: {response.get('data', {}).get('chunks', [])}")
 
     return response
 

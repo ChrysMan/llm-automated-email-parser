@@ -32,8 +32,8 @@ class QueryRequest(BaseModel):
     query: str
 
 class QueryResponse(BaseModel):
-    answer: str
-    retrieved_contexts: Optional[List[dict]] = None
+    answer: dict
+    retrieved_contexts: Optional[dict] = None
 
 @app.on_event("startup")
 async def startup_event():
@@ -87,11 +87,12 @@ async def simple_query_endpoint(request_data: QueryRequest):
         )
         
         return QueryResponse(
-            answer=result.get("llm_response", {}),
-            retrieved_contexts=result.get("data", [])
+            answer=result.get("llm_response", ""),
+            retrieved_contexts=result.get("data", {})
         )
 
     except Exception as ex:
+        print(f"!!! RAG ERROR: {type(ex).__name__}: {str(ex)}")
         raise HTTPException(status_code=500, detail=str(ex))
 
 @app.get("/health")

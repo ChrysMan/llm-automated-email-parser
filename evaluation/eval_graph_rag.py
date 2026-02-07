@@ -1,9 +1,11 @@
+
 import os, sys, json
 from pathlib import Path
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Any
+from datetime import datetime
 from deepeval import evaluate
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams
-from deepeval.metrics import GEval
+from deepeval.metrics import GEval, ContextualRecallMetric, ContextualRelevancyMetric, FaithfulnessMetric,  AnswerRelevancyMetric
 from deepeval.models.llms.gemini_model import GeminiModel
 from dotenv import load_dotenv
 
@@ -15,43 +17,73 @@ load_dotenv()
 def create_graph_metrics() -> List[GEval]:
         eval_model = GeminiModel(model=os.getenv("EVAL_LLM_MODEL", "gemini-2.5-flash"), api_key=os.getenv("EVAL_LLM_BINDING_API_KEY"))
         
-        # Checks if the answer contradicts text context OR the entity/relationship triples.
-        faithfulness = GEval(
-            name="Graph-Faithfulness",
+        # # Checks if the answer contradicts text context OR the entity/relationship triples.
+        # faithfulness = GEval(
+        #     name="Graph-Faithfulness",
+        #     model=eval_model,
+        #     criteria="""Determine if the 'actual output' is factually consistent with the information in the 'retrieval context'. 
+        #     The 'retrieval context' contains context chunks, entities, and relationships. 
+        #     Contradicting any specific claim entity property or relationship triple in the 'retrieval context' must result in a low score.
+        #     The score ranges from 0 to 1, where 1 means the 'actual output' is fully supported by the 'retrieval context' without any contradictions, and 0 means it is completely contradicted.
+        #     Provide a granular score with two decimal places (e.g., 0.85) to reflect the exact degree of consistency.""",
+        #     evaluation_params=[
+        #         LLMTestCaseParams.ACTUAL_OUTPUT, 
+        #         LLMTestCaseParams.RETRIEVAL_CONTEXT,
+        #         #LLMTestCaseParams.INPUT # Used to see if entities/rels are being applied
+        #     ]
+        # )
+
+        # # Checks if all necessary information from the Ground Truth is found in the RAG Graph data.
+        # context_recall = GEval(
+        #     name="Graph-Context-Recall",
+        #     model=eval_model,
+        #     criteria="""Assess if the 'retrieval context' contains all the necessary facts to produce the 'expected output'. 
+        #     The 'retrieval context' includes context chunks, entities and relationships; check if the specific triples and claims required for the 'expected output' were successfully retrieved.
+        #     The score ranges from 0 to 1, where 1 means the 'retrieval context' contains all the necessary information to fully support the 'expected output', and 0 means it contains none of the necessary information.
+        #     Provide a granular score with two decimal places (e.g., 0.85) to reflect the exact degree of consistency.
+        #     """,
+        #     evaluation_params=[
+        #         LLMTestCaseParams.RETRIEVAL_CONTEXT, 
+        #         LLMTestCaseParams.EXPECTED_OUTPUT
+        #     ]
+        # )
+
+        # context_relevancy = GEval(
+        #     name="Graph-Context-Relevancy",
+        #     model=eval_model,
+        #     threshold=0.2,
+        #     criteria="""Evaluate the efficiency of the 'retrieval context'. 
+        #     Calculate the ratio of claims in the context chunks, retrieved entities and relationships that are actually 
+        #     necessary to answer the 'input' compared to the total number of items retrieved. 
+        #     Do NOT penalize based on the order of items; only focus on the presence of signal vs. noise.
+        #     The score ranges from 0 to 1, where 1 means all retrieved items are relevant and necessary to answer the question, and 0 means none of the retrieved items are relevant.
+        #     Provide a granular score with two decimal places (e.g., 0.85) to reflect the exact degree of consistency.
+        #     """,
+        #     evaluation_params=[
+        #         LLMTestCaseParams.INPUT, 
+        #         LLMTestCaseParams.RETRIEVAL_CONTEXT
+        #     ]
+        # )
+
+        faithfulness = FaithfulnessMetric(
+            threshold=0.7,
             model=eval_model,
-            criteria="""Determine if the 'actual output' is factually consistent with the information in the 'retrieval context'. 
-            The 'retrieval context' contains context chunks, entities, and relationships. 
-            Contradicting any specific claim entity property or relationship triple in the 'retrieval context' must result in a low score.""",
-            evaluation_params=[
-                LLMTestCaseParams.ACTUAL_OUTPUT, 
-                LLMTestCaseParams.RETRIEVAL_CONTEXT,
-                LLMTestCaseParams.INPUT # Used to see if entities/rels are being applied
-            ]
+            include_reason=True
         )
 
-        # Checks if all necessary information from the Ground Truth is found in the RAG Graph data.
-        context_recall = GEval(
-            name="Graph-Context-Recall",
+        answer_relevancy = AnswerRelevancyMetric(
+            threshold=0.7,
             model=eval_model,
-            criteria="""Assess if the 'retrieval context' contains all the necessary facts to produce the 'expected output'. 
-            The 'retrieval context' includes context chunks, entities and relationships; check if the specific triples and claims required for the 'expected output' were successfully retrieved.""",
-            evaluation_params=[
-                LLMTestCaseParams.RETRIEVAL_CONTEXT, 
-                LLMTestCaseParams.EXPECTED_OUTPUT
-            ]
+            include_reason=True
+        )
+        
+        context_recall = ContextualRecallMetric(
+            threshold=0.7,
+            model=eval_model,
+            include_reason=True
         )
 
-        context_relevancy = GEval(
-            name="Graph-Context-Relevancy",
-            model=eval_model,
-            criteria="""Evaluate the efficiency of the 'retrieval context'. 
-            Calculate the ratio of claims in the context chunks, retrieved entities and relationships that are actually 
-            necessary to answer the 'input' compared to the total number of items retrieved. 
-            Do NOT penalize based on the order of items; only focus on the presence of signal vs. noise.""",
-            evaluation_params=[LLMTestCaseParams.INPUT, LLMTestCaseParams.RETRIEVAL_CONTEXT]
-        )
-
-        return [faithfulness, context_recall, context_relevancy]
+        return [faithfulness, answer_relevancy, context_recall]
 
 class GRAPH_RAGEvaluator:
     """
@@ -98,8 +130,18 @@ class GRAPH_RAGEvaluator:
                 f"{self.rag_api_url}/query", 
                 json=payload
             )
+            response.raise_for_status()
+            result = response.json()
 
-            return response.json() if response.status_code == 200 else {"error": f"Failed to retrieve response: {response.status_code}"}
+            answer = result.get("answer", "No response generated")
+            context = result.get("retrieved_contexts", {})
+
+            return {
+                "content": answer.get("content", ""),
+                "chunks": context.get("chunks", []),
+                "entities": context.get("entities", []),
+                "relationships": context.get("relationships", [])
+            }
         except Exception as e:
             raise Exception(f"Error calling LightRAG API: {type(e).__name__}: {str(e)}")
 
@@ -111,38 +153,51 @@ class GRAPH_RAGEvaluator:
         except Exception as e:
                 LOGGER.error("Error generating response for test %s: %s", idx, str(e))
                 return {
-                    "question": test_case["question"],
+                    "idx": idx,
+                    "question": test_case.get("question", ""),
                     "answer": "",
-                    "expected_output": test_case["ground_truth"],
-                    "metrics": {},
-                    "ragas_score": 0
+                    "expected_output": test_case.get("ground_truth", ""),
+                    "metrics": {}
                 }
         
         if "error" in rag_response:
             return {"error": rag_response["error"]}
 
         combined_context = [
-            f"Context chunks: {rag_response.get('data', {}).get('chunks', [])}",
-            f"Entities: {rag_response.get('data', {}).get('entities', [])}",
-            f"Relationships: {rag_response.get('data', {}).get('relationships', [])}"
+            f"Context chunks: {rag_response.get('chunks', [])}",
+            f"Entities: {rag_response.get('entities', [])}",
+            f"Relationships: {rag_response.get('relationships', [])}"
 ]
         # Combine RAG response with test case for evaluation
         combined_test_case = LLMTestCase(
-            input=test_case["question"],
-            actual_output=rag_response.get("llm_response", {}),
+            input=test_case.get("question", ""),
+            actual_output=str(rag_response.get("content", "")),
             retrieval_context=combined_context,
-            expected_output=test_case["ground_truth"]
+            expected_output=test_case.get("ground_truth", "")
         )
 
         evaluation_results = evaluate([combined_test_case], self.metrics)
+        
+        metrics_summary = {}
+        for result in evaluation_results.test_results:
+            for metric in result.metrics_data:
+                clean_name = metric.name.split(" [")[0]
 
+                summary = {
+                    "score": metric.score,
+                    "success": "✅" if metric.success else "❌",
+                    "reason": metric.reason,
+                    "model": metric.evaluation_model
+                }
+                metrics_summary[clean_name] = summary
+            
+       #print(f"Evaluation results for test case {idx}: {evaluation_results}\n\nType: {type(evaluation_results)}")
         result={
             "idx": idx,
-            "question": test_case.input,
+            "question": test_case.get("question", ""),
             "answer": combined_test_case.actual_output,
-            "expected_output": test_case.expected_output,
-            "metrics": evaluation_results[0].test_results if evaluation_results else {},
-            "overall_score": sum(evaluation_results[0].test_results.values()) / len(evaluation_results[0].test_results) if evaluation_results and evaluation_results[0].test_results else 0
+            "expected_output": test_case.get("ground_truth", ""),
+            "metrics": metrics_summary
             }
         return result
 
@@ -154,11 +209,13 @@ if __name__ == "__main__":
     results = []
     for idx, test_case in enumerate(evaluator.test_cases):
         LOGGER.info("Evaluating test case %d: %s", idx, test_case.get("input", ""))
+
         result = evaluator.evaluate_single_case(idx, test_case)
         results.append(result)
 
     # Save results to JSON
-    results_path = evaluator.results_dir / f"graph_rag_evaluation_{len(results)}.json"
+    results_path = evaluator.results_dir / f"results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+
     with open(results_path, "w", encoding="utf-8") as file:
         json.dump(results, file, indent=2, ensure_ascii=False, default=str)
     LOGGER.info("Evaluation completed. Results saved to %s", results_path)

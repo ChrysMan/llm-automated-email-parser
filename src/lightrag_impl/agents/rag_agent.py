@@ -66,8 +66,8 @@ async def retrieve(ctx: RunContext[AgentDeps], question: str) -> str:
         str: The retrieved information from the RAG system.
     """
     response = await run_async_query(rag = ctx.deps.lightrag, question=question, mode="mix")  
-    
-    return response.get("llm_response", {})
+    #print(f"{type(response)}, {type(response.get('llm_response', ''))}")  # Debugging line to check the structure of the response
+    return response.get("llm_response", "")
 
 @rag_agent.tool
 async def rephrase_and_refine_query(ctx: RunContext[AgentDeps], user_query: str) -> RefinedQueries:
