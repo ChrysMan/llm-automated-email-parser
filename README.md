@@ -69,7 +69,7 @@ python -m preprocessing_implementations.vllm_serve /path/to/your/data/directory
 # Create Neo4j knowledge graph from emails
 python -m graphrag_impl.vectorDB_impl.create_kg /path/to/your/data/directory
 # Run the bot with an agent implementing RAG on the knowledge graph
-python -m streamlit run graphrag_impl..bot  
+python -m streamlit run graphrag_impl/bot.py  
 ```
 
 ##### Note: 
