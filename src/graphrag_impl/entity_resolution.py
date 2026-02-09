@@ -4,7 +4,7 @@ from langchain_neo4j import Neo4jVector
 from pydantic import BaseModel, Field
 from tqdm import tqdm
 from graphdatascience import GraphDataScience
-from .llm import dedup_llm, embedding_provider
+from .llm import llm, embedding_provider
 from .graph import graph
 from langchain_core.prompts import ChatPromptTemplate
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -101,7 +101,6 @@ Here are the rules for identifying duplicates:
 Examples of what not to merge:
 - ['12345_unique.4', '12345_unique.26', '12345_unique.40'] 
 - ['Monday, January 22, 2024 08:22 AM', 'Monday, January 22, 2024 10:22 Am']
-- ['12345-ACY-DN_ocr', '12345-ACY-DO_ocr']
 
 Examples of what to merge:
 - ['Monday, January 22, 2024 08:22 AM', 'Monday, January 22, 2024 20:22 Am', 'Mon, Jan 22, 2024 08:22', 22/01/2024 08:22']
@@ -126,7 +125,7 @@ class Disambiguate(BaseModel):
     )
 
 
-extraction_llm = dedup_llm.with_structured_output(Disambiguate)
+extraction_llm = llm.with_structured_output(Disambiguate)
 
 extraction_prompt = ChatPromptTemplate.from_messages(
     [

@@ -101,9 +101,6 @@ async def run_async_query(rag: LightRAG, question: str, mode: str) -> dict[str, 
             d.pop("chunk_id", None)
             d.pop("reference_id", None)
     
-    # print(f"\n\n[run_async_query] RAG response llm_response: {response.get('llm_response', '')}")
-    # print(f"[_build_query_context] Raw data entities: {response.get('data', {}).get('entities', [])}, relationships: {response.get('data', {}).get('relationships', [])}, chunks: {response.get('data', {}).get('chunks', [])}")
-
     return response
 
         

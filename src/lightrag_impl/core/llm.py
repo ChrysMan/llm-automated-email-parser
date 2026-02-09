@@ -17,11 +17,11 @@ agent_llm = OpenAIChatModel(
 )
 
 ref_llm = ChatOpenAI(
-            temperature=0.2, 
-            model=os.getenv("LLM_MODEL", "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8"), 
-            base_url=os.getenv("LLM_BINDING_HOST"), 
-            api_key=os.getenv("LLM_BINDING_API_KEY")
-        )
+    temperature=0.2, 
+    model=os.getenv("LLM_MODEL", "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8"), 
+    base_url=os.getenv("LLM_BINDING_HOST"), 
+    api_key=os.getenv("LLM_BINDING_API_KEY")
+)
 
 rerunk_func = partial(
     generic_rerank_api, 

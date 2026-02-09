@@ -2,43 +2,22 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-# Create the LLM
-from langchain_ollama import ChatOllama
+from pydantic_ai.providers.openai import OpenAIProvider
+from langchain_openai import ChatOpenAI
+from langchain_huggingface import HuggingFaceEmbeddings
 
-# model = "mistral-7b"
-# model = "neural-chat:latest"
-# model = "gemma3:latest"
-# model = "llama3.2:3b"
-# model = "llama3.1:8b"
-model="qwen2.5:14b"
 
-llm = ChatOllama( 
-    model=model,
-    temperature=0.3
+llm = ChatOpenAI(
+    model=os.getenv("LLM_AGENT_MODEL", "Qwen/Qwen2.5-7B-Instruct-GPTQ-Int8"),
+    base_url=os.getenv("LLM_AGENT_BINDING_HOST"), 
+    api_key=os.getenv("LLM_AGENT_BINDING_API_KEY"),
+    temperature=0    
 )
 
-dedup_llm = ChatOllama(
-    model="qwen2.5:32b",
-    temperature=0
+embedding_provider = HuggingFaceEmbeddings(
+    model_name = "BAAI/bge-m3",
+    model_kwargs={"device": "cpu"},
+    encode_kwargs = {'normalize_embeddings': True}  
 )
 
-qa_llm = ChatOllama(
-    model=model,
-    temperature=0.2
-)
 
-cypher_llm = ChatOllama(
-    model=model,    
-    num_predict=16384,
-    temperature=0
-)
-
-# Create the Embedding model
-from langchain_ollama import OllamaEmbeddings
-
-#embed_model = "mxbai-embed-large"
-embed_model = "nomic-embed-text"
-
-embedding_provider = OllamaEmbeddings(
-    model=embed_model
-)

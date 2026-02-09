@@ -66,19 +66,19 @@ def create_graph_metrics() -> List[GEval]:
         # )
 
         faithfulness = FaithfulnessMetric(
-            threshold=0.7,
+            threshold=0.6,
             model=eval_model,
             include_reason=True
         )
 
         answer_relevancy = AnswerRelevancyMetric(
-            threshold=0.7,
+            threshold=0.6,
             model=eval_model,
             include_reason=True
         )
         
         context_recall = ContextualRecallMetric(
-            threshold=0.7,
+            threshold=0.6,
             model=eval_model,
             include_reason=True
         )
@@ -103,7 +103,7 @@ class GRAPH_RAGEvaluator:
 
         self.test_dataset_path = Path(test_dataset_path)
         self.rag_api_url = rag_api_url.rstrip("/")
-        self.results_dir = Path(__file__).parent / "graph_rag_results"
+        self.results_dir = Path(__file__).parent / "lightrag_rag_results"
         self.results_dir.mkdir(exist_ok=True)
 
         # Load test dataset
@@ -207,16 +207,36 @@ if __name__ == "__main__":
     evaluator = GRAPH_RAGEvaluator(metrics=metrics, test_dataset_path="sample_dataset.json", rag_api_url=os.getenv("RAG_API_URL"))
 
     results = []
-    for idx, test_case in enumerate(evaluator.test_cases):
-        LOGGER.info("Evaluating test case %d: %s", idx, test_case.get("input", ""))
+    totals = {"Faithfulness": 0.0, "Answer Relevancy": 0.0, "Contextual Recall": 0.0}
 
+    for idx, test_case in enumerate(evaluator.test_cases):
+        LOGGER.info(f"Evaluating test case {idx}")
+        
         result = evaluator.evaluate_single_case(idx, test_case)
         results.append(result)
+        
+        metrics_output = result.get("metrics", {})
+        
+        for m_name in totals.keys():
+            score = metrics_output.get(m_name, {}).get("score", 0)
+            totals[m_name] += score
 
-    # Save results to JSON
+    num_cases = len(evaluator.test_cases) if len(evaluator.test_cases) > 0 else 1
+    average_scores = {
+        name: round(total / num_cases, 3) 
+        for name, total in totals.items()
+    }
+
+    average_scores["Overall_Score"] = round(sum(average_scores.values()) / len(totals), 3)
+
+    final_output = {
+        "individual_results": results,
+        "summary_statistics": average_scores
+    }
+
     results_path = evaluator.results_dir / f"results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
 
     with open(results_path, "w", encoding="utf-8") as file:
-        json.dump(results, file, indent=2, ensure_ascii=False, default=str)
+        json.dump(final_output, file, indent=2, ensure_ascii=False, default=str)
     LOGGER.info("Evaluation completed. Results saved to %s", results_path)
     

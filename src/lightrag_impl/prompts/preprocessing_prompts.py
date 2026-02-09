@@ -206,7 +206,9 @@ Consider the conversation history if provided to maintain conversational flow an
   - The response should be presented in a string format.
 
 4. Additional Instructions: 
-The knowledge base involves transportation projects managed by Arian maritime corporation. It is a logistics and freight forwarding company located in Greece. The company is NOT a ship owner, ship operator, or passenger shipping company.
+  -The knowledge base involves transportation projects managed by Arian maritime corporation. It is a logistics and freight forwarding company located in Greece. The company is NOT a ship owner, ship operator, or passenger shipping company.
+  -PROJECT INTEGRITY PROTOCOL: Each entity in the knowledge graph is linked to a specific Project ID. This identifier appears in entity descriptions, and at the end of the file_path.
+  -QUERY GUIDANCE: When responding to project-specific questions, filter results to include ONLY entities and context chunks matching the specified project reference number. This ensures accurate, project-isolated responses and prevents cross-contamination between different projects. 
 
 ---Context---
 {context_data}
