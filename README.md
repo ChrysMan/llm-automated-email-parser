@@ -3,16 +3,16 @@
 This repository contains the implementation of my thesis, **"Automating Information Extraction from Emails using Large Language Models"**.
 It presents a high-performance Multi-Agent System (MAS) that converts unstructured enterprise email workflows into structured, queryable knowledge. The system combines **retrieval-augmented generation (RAG)** pipelines with a **supervisor-agent architecture**, coordinating multiple specialized agents for efficient and scalable processing. It is deployed via **FastAPI** and features a **Streamlit-based chatbot interface**, allowing users to interactively generate and query knowledge graphs extracted from their email workflows.
 
-Three inference techniques were evaluated:
+**Three inference techniques were evaluated:**
 - Sequential offline inference
 - Offline batched inference using vLLM engine
 - Concurrent inference via vLLM HTTP server
 
-Experimented with two prompting methods:
+**Experimented with two prompting methods:**
 - 4 Prompts: Four distinct prompts for translation, formatting, headers, and body.
 - 2 Prompts: Two distinct prompts that combine translation with formatting, and headers with body.
   
-Three different RAG architectures were implemented: 
+**Three different RAG architectures were implemented:** 
 - Naive RAG on Vector Database
 - GraphRAG
 - Advanced GraphRAg using [LightRAG](https://github.com/HKUDS/LightRAG) framework
