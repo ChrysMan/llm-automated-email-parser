@@ -15,7 +15,6 @@ dependencies:
   - cuda-nvrtc=12.8.93=hbdd6827_1
   - cuda-version=12.8=h30beaf8_3
   - expat=2.7.3=h7354ed3_4
-  - faiss-gpu=1.9.0=py3.12_ha2e4562_0_cuda12.1.1
   - intel-openmp=2023.0.0=h9e868ea_25371
   - ld_impl_linux-64=2.44=h153f514_2
   - libcublas=12.8.4.1=hbdd6827_1
@@ -120,11 +119,13 @@ dependencies:
       - ecdsa==0.19.1
       - einops==0.8.1
       - email-validator==2.3.0
+      - en-core-web-lg==3.8.0
       - et-xmlfile==2.0.0
       - eval-type-backport==0.3.1
       - exceptiongroup==1.3.1
       - executing==2.2.1
       - extract-msg==0.55.0
+      - faiss-cpu==1.13.2
       - fakeredis==2.33.0
       - fastapi==0.128.0
       - fastapi-cli==0.0.20
@@ -169,6 +170,8 @@ dependencies:
       - jinja2==3.1.6
       - jiter==0.12.0
       - jmespath==1.0.1
+      - joblib==1.5.3
+      - jq==1.11.0
       - json-repair==0.44.1
       - jsonpatch==1.33
       - jsonpointer==3.0.0
@@ -180,6 +183,7 @@ dependencies:
       - langchain-classic==1.0.1
       - langchain-community==0.4.1
       - langchain-core==1.2.7
+      - langchain-experimental==0.4.1
       - langchain-huggingface==1.2.0
       - langchain-neo4j==0.7.0
       - langchain-ollama==1.0.1
@@ -263,6 +267,7 @@ dependencies:
       - opentelemetry-sdk==1.39.1
       - opentelemetry-semantic-conventions==0.60b1
       - opentelemetry-util-http==0.60b1
+      - optimum==2.1.0
       - orjson==3.11.5
       - ormsgpack==1.12.1
       - outlines-core==0.2.11
@@ -271,6 +276,7 @@ dependencies:
       - pathable==0.4.4
       - pathvalidate==3.3.1
       - pcodedmp==1.2.6
+      - pdf2image==1.17.0
       - pillow==12.0.0
       - pipmaster==1.1.0
       - platformdirs==4.5.1
@@ -334,8 +340,10 @@ dependencies:
       - rtfde==0.1.2.2
       - s3transfer==0.16.0
       - safetensors==0.7.0
+      - scikit-learn==1.8.0
       - scipy==1.17.0
       - secretstorage==3.5.0
+      - sentence-transformers==5.2.0
       - sentencepiece==0.2.1
       - sentry-sdk==2.49.0
       - setproctitle==1.3.7
@@ -362,6 +370,7 @@ dependencies:
       - temporalio==1.20.0
       - tenacity==9.1.2
       - thinc==8.3.10
+      - threadpoolctl==3.6.0
       - tiktoken==0.12.0
       - tokenizers==0.22.2
       - toml==0.10.2

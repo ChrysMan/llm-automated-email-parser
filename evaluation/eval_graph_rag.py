@@ -90,8 +90,9 @@ class GRAPH_RAGEvaluator:
     Evaluator for RAG system outputs using G-Eval framework.
     Evaluates the quality of retrieved contexts and their impact on answer generation.
     """
-    def __init__(self, metrics: List[GEval], test_dataset_path: str = None, rag_api_url: str = None):
+    def __init__(self, metrics: List[GEval], choice: str, test_dataset_path: str = None, rag_api_url: str = None):
         self.metrics = metrics
+        self.choice = choice
         self.test_dataset_path = test_dataset_path
         self.rag_api_url = rag_api_url
         
@@ -103,7 +104,7 @@ class GRAPH_RAGEvaluator:
 
         self.test_dataset_path = Path(test_dataset_path)
         self.rag_api_url = rag_api_url.rstrip("/")
-        self.results_dir = Path(__file__).parent / "lightrag_rag_results"
+        self.results_dir = Path(__file__).parent / "vectorDB_rag_results" if choice == "1" else Path(__file__).parent / "graphrag_rag_results" if choice == "2" else Path(__file__).parent / "lightrag_rag_results"
         self.results_dir.mkdir(exist_ok=True)
 
         # Load test dataset
@@ -131,19 +132,51 @@ class GRAPH_RAGEvaluator:
                 json=payload
             )
             response.raise_for_status()
-            result = response.json()
+            result = response.json()         
 
-            answer = result.get("answer", "No response generated")
-            context = result.get("retrieved_contexts", {})
+            #For VectorDB API response structure
+            if self.choice == "1":
+                try:
+                    answer = result.get("response", "No response generated")
+                    chunks = result.get("context", "")
+                    entities = []
+                    relationships = []
+                except Exception as e:
+                    LOGGER.error("Unexpected response format from VectorDB API: %s", str(e))
+                    return {"error": f"Unexpected response format: {str(e)}"}
+
+            # For GraphRAG API response structure
+            if self.choice == "2":
+                try:
+                    messages = result['response']
+                    answer = messages[-1]['content'] 
+                    chunks = messages[2]['content'] 
+                    relationships = messages[3]['content'] 
+                    entities = []
+                except Exception as e:
+                    LOGGER.error("Unexpected response format from RAG API: %s", str(e))
+                    return {"error": f"Unexpected response format: {str(e)}"}
+                
+            # For LightRAG API response structure
+            if self.choice == "3":
+                try:
+                    answer = result.get("answer", "No response generated").get("content", "")
+                    context = result.get("retrieved_contexts", {})
+                    chunks = context.get("chunks", [])
+                    entities = context.get("entities", [])
+                    relationships = context.get("relationships", [])
+                except Exception as e:
+                    LOGGER.error("Unexpected response format from LightRAG API: %s", str(e))
+                    return {"error": f"Unexpected response format: {str(e)}"}
 
             return {
-                "content": answer.get("content", ""),
-                "chunks": context.get("chunks", []),
-                "entities": context.get("entities", []),
-                "relationships": context.get("relationships", [])
+                "content": answer,
+                "chunks": chunks,
+                "entities": entities,
+                "relationships": relationships 
             }
         except Exception as e:
-            raise Exception(f"Error calling LightRAG API: {type(e).__name__}: {str(e)}")
+            raise Exception(f"Error calling GraphRAG API: {type(e).__name__}: {str(e)}")
 
     
     def evaluate_single_case(self, idx: int, test_case: Dict[str, str]) -> Dict[str, Any]:
@@ -203,8 +236,24 @@ class GRAPH_RAGEvaluator:
 
 
 if __name__ == "__main__":
+    print("----------- Evaluation Choices -----------")
+    print("\n1. Run vectorDB RAG Evaluation")
+    print("\n2. Run GraphRAG Evaluation")
+    print("\n3. Run LightRAG Evaluation")
+    print("\n4. Exit")
+    print("\n-----------------------------------------")
+    choice = input("\nEnter the number corresponding to the evaluation you want to run: ").strip
+
+    while choice != {"1", "2", "3", "4"}:
+        print("\nInvalid choice. Please enter 1, 2, 3, or 4.")
+        choice = input("\nEnter the number corresponding to the evaluation you want to run: ").strip()
+
+    if choice == "4":
+        print("\nExiting the evaluation script. Goodbye!")
+        sys.exit(0)
+
     metrics = create_graph_metrics()
-    evaluator = GRAPH_RAGEvaluator(metrics=metrics, test_dataset_path="sample_dataset.json", rag_api_url=os.getenv("RAG_API_URL"))
+    evaluator = GRAPH_RAGEvaluator(metrics=metrics, choice=choice, test_dataset_path="sample_dataset.json", rag_api_url=os.getenv("RAG_API_URL"))
 
     results = []
     totals = {"Faithfulness": 0.0, "Answer Relevancy": 0.0, "Contextual Recall": 0.0}

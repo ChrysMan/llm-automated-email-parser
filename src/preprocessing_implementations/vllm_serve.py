@@ -9,36 +9,37 @@ from openai import OpenAI
 
 from utils.logging import LOGGER
 from utils.email_utils import extract_msg_file, clean_data, split_email_thread
-from lightrag_impl.prompts.preprocessing_prompts import cleaning_prompt, formatter_and_translator_prompt
+from prompts.preprocessing_prompts import cleaning_prompt, formatter_and_translator_prompt
 
 load_dotenv()
 
-langsmith_api_key = os.getenv("LANGSMITH_API_KEY")
-if langsmith_api_key:
-    os.environ["LANGCHAIN_TRACING_V2"] = "true"
-    os.environ["LANGCHAIN_ENDPOINT"]="https://api.smith.langchain.com"
-    os.environ["LANGSMITH_PROJECT"] = "email_preprocessing"
-else:
-    LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
+# langsmith_api_key = os.getenv("LANGSMITH_API_KEY")
+# if langsmith_api_key:
+#     os.environ["LANGCHAIN_TRACING_V2"] = "true"
+#     os.environ["LANGCHAIN_ENDPOINT"]="https://api.smith.langchain.com"
+#     os.environ["LANGSMITH_PROJECT"] = "email_preprocessing"
+# else:
+#     LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
 
 class LLMPredictor:
 
     def __init__(self):
         self.client = OpenAI(
-            base_url="http://localhost:8002/v1",#os.getenv("LLM_BINDING_HOST"),
+            base_url=os.getenv("LLM_BINDING_HOST"),
             api_key=os.getenv("LLM_BINDING_API_KEY"),
             max_retries=3
         )
+        self.model = os.getenv("LLM_MODEL", "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8")
 
     @traceable
     def process_single_prompt(self, prompt:str)->str:
         """Processes a single prompt using the standard completions API."""
         response = self.client.completions.create(
-            model=os.getenv("LLM_MODEL", "Qwen/Qwen2.5-14B-Instruct-GPTQ-Int8"),
+            model=self.model,
             prompt=prompt,
             temperature=0,
             max_tokens=4096,
-            stop="End of email"
+            stop="<|eot_id|>"#"End of email"
         )
 
         return response.choices[0].text

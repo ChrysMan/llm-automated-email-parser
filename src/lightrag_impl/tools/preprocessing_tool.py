@@ -1,9 +1,9 @@
-import os, json, re
+import os, json, re, sys
 from time import time
 
-from ..preprocessing.vllm_predictor import LLMPredictor
-from ..preprocessing.deduplicate import deduplicate_emails
-from ..prompts.preprocessing_prompts import cleaning_prompt,formatter_and_translator_prompt, formatter_prompt, translator_prompt, body_cleaning_prompt, headers_cleaning_prompt
+from preprocessing_implementations.vllm_serve import LLMPredictor
+from preprocessing_implementations.deduplicate import deduplicate_emails
+from prompts.preprocessing_prompts import cleaning_prompt,formatter_and_translator_prompt, formatter_prompt, translator_prompt, body_cleaning_prompt, headers_cleaning_prompt
 from utils.email_utils import extract_msg_file, clean_data, split_email_thread
 from utils.logging import LOGGER
 
@@ -34,6 +34,7 @@ def execute_full_preprocessing(dir_path: str)-> str:
 
     # Prepare all prompts outside the file loop
     try:
+        """Used for 2-prompt method, can be uncommented if needed"""
         formatting_prompts = [formatter_and_translator_prompt.format(email=e) for e in all_emails_to_process]
         results = predictor(formatting_prompts)
 
@@ -42,6 +43,8 @@ def execute_full_preprocessing(dir_path: str)-> str:
         cleaning_prompts = [cleaning_prompt.format(email=e) for e in str_results]
         results = predictor(cleaning_prompts)
 
+
+        """Used for 4-prompt method, can be uncommented if needed"""
         # translator_prompts = [translator_prompt.format(email=e) for e in all_emails_to_process]
         # results = predictor(translator_prompts)
 
@@ -93,3 +96,15 @@ def execute_full_preprocessing(dir_path: str)-> str:
         LOGGER.error(f"Error during deduplication or saving: {e}")
         return "Error during deduplication or saving: {e}"
    
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        LOGGER.error("Usage: python preprocessing_tool.py <dir_path>")
+        sys.exit(1)
+
+    dir_path = sys.argv[1]
+    if not os.path.isdir(dir_path):
+        LOGGER.error(f"{dir_path} is not a valid directory.")
+        sys.exit(1)
+
+    result_message = execute_full_preprocessing(dir_path)
+    print(result_message)   

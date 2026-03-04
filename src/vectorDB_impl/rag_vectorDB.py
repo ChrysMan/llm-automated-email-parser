@@ -1,15 +1,12 @@
 import faiss, os, spacy, sys
-import numpy as np
-from typing import Any
 from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings.spacy_embeddings import SpacyEmbeddings
 from langchain_huggingface import HuggingFaceEmbeddings
 
 from preprocessing_implementations.vllm_serve import LLMPredictor
-from lightrag_impl.prompts.preprocessing_prompts import rag_prompt
+from prompts.preprocessing_prompts import rag_prompt
 from utils.file_io import read_json_file
-
 from utils.logging import LOGGER
 
 FAISS_DB_PATH = "/home/chryssida/llm-automated-email-parser/src/faiss_db.index"
@@ -25,16 +22,14 @@ def init_embed_hf(model: str)->HuggingFaceEmbeddings:
 
 def init_embed_spacy()->SpacyEmbeddings:
     nlp = spacy.load("en_core_web_lg")
-    #embeddings = np.array([doc.vector for doc in map(nlp, unique_emails)], dtype=np.float32)
     embedder = SpacyEmbeddings(model_name="en_core_web_lg", nlp=nlp)
     return embedder
 
 def index_faiss_db(unique_emails: list[str], embedder: HuggingFaceEmbeddings|SpacyEmbeddings):
 
     embeddings = embedder.embed_documents(unique_emails)
-    #faiss.normalize_L2(embeddings)
 
-    if os.path.exists(FAISS_DB_PATH): # Check if they are added twice
+    if os.path.exists(FAISS_DB_PATH): # Check if index exists
         try:
             LOGGER.info("Loading existing FAISS index...")
             vectorstore = FAISS.load_local(FAISS_DB_PATH, embedder, allow_dangerous_deserialization=True)
@@ -80,8 +75,31 @@ def retrieve_with_normalized_scores(embedder: HuggingFaceEmbeddings|SpacyEmbeddi
 
     return results
 
+def load_vectorstore(embedder: HuggingFaceEmbeddings)->FAISS:
+    if os.path.exists(FAISS_DB_PATH):
+        try:
+            vectorstore = FAISS.load_local(FAISS_DB_PATH, embedder, allow_dangerous_deserialization=True)
+            return vectorstore
+        except Exception as e:
+            LOGGER.error(f"Error while loading the vectorstore: {e}")
+            sys.exit(1)
+    else:
+        LOGGER.error(f"FAISS index not found at {FAISS_DB_PATH}. Please create the index first.")
+        sys.exit(1)
+
+def vectordb_retrieval(query: str, embedder: HuggingFaceEmbeddings, vectorstore:FAISS, k: int = 4, score_threshold: float = 0.5):
+    predictor = LLMPredictor()
+
+    contexts = retrieve_with_normalized_scores(embedder, vectorstore, query, k=k, score_threshold=score_threshold)
+    ctx_str = "\n\n".join([doc.page_content for doc, _ in contexts])
+    
+    prompt = rag_prompt.format(context_data=ctx_str, query=query)
+
+    result = predictor.process_single_prompt(prompt)
+    return result, ctx_str
+
 if __name__ == "__main__":
-    #file_path = "/home/chryssida/DATA_TUC-KRITI/AIR EXPORT/230009/230009.json"
+    #file_path = "/home/chryssida/DATA_TUC-KRITI/TRUCK EXPORT/244037/244037_unique.json"
     file_path= ""
     predictor = LLMPredictor()
     embedder = init_embed_hf(EMBED_MODEL)
@@ -107,7 +125,7 @@ if __name__ == "__main__":
         # docs = retriever.invoke(query)
         # emails = [doc.page_content for doc in docs]
 
-        contexts = retrieve_with_normalized_scores(embedder, vectorstore, query, k=15, score_threshold=0.4)
+        contexts = retrieve_with_normalized_scores(embedder, vectorstore, query, k=10, score_threshold=0.5)
         ctx_str = "\n\n".join([doc.page_content for doc, _ in contexts])
 
         prompt = rag_prompt.format(context_data=ctx_str, query=query)

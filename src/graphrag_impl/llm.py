@@ -2,7 +2,6 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-from pydantic_ai.providers.openai import OpenAIProvider
 from langchain_openai import ChatOpenAI
 from langchain_huggingface import HuggingFaceEmbeddings
 

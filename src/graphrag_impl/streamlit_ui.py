@@ -1,9 +1,6 @@
 import streamlit as st
-from utils import write_message
-from agent import generate_response
-
-from streamlit.runtime.scriptrunner import get_script_run_ctx
-
+from .utils import write_message
+from .agent import generate_response
 
 st.set_page_config("Ebert", page_icon="🎙️")
 

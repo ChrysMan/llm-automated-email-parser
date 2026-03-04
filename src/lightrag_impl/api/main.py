@@ -74,7 +74,6 @@ async def simple_query_endpoint(request_data: QueryRequest):
     query_text = request_data.query
 
     deps = getattr(app.state, "deps", None)
-    supervisor_agent = getattr(app.state, "supervisor_agent", None)
     
     if deps is None:
         raise HTTPException(status_code=503, detail="System not initialized")

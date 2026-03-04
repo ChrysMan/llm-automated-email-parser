@@ -18,7 +18,7 @@ tmux split-window -v -t $SESSION_NAME:0.0
 tmux split-window -h -t $SESSION_NAME:0.1
 # tmux split-window -h -t $SESSION_NAME:0.0
 
-tmux select-pane -t $SESSION_NAME:0.1 -T "Qwen3-LLM"
+tmux select-pane -t $SESSION_NAME:0.1 -T "Qwen7-LLM"
 tmux select-pane -t $SESSION_NAME:0.2 -T "BGE-Reranker"
 #tmux select-pane -t $SESSION_NAME:0.3 -T "Deepseek-OCR"
 
@@ -28,7 +28,7 @@ tmux send-keys -t $SESSION_NAME:0.0 "CUDA_VISIBLE_DEVICES=0,1 vllm serve Qwen/Qw
 
 # Pane 0.1: Qwen3 (GPU 3)
 tmux send-keys -t $SESSION_NAME:0.1 "$SETUP_CMD" C-m
-tmux send-keys -t $SESSION_NAME:0.1 "CUDA_VISIBLE_DEVICES=3 vllm serve Qwen/Qwen2.5-3B-Instruct --port 8002 --dtype float16 --gpu-memory-utilization 0.7 --max-model-len 17000 --enable-auto-tool-choice --tool-call-parser hermes" C-m
+tmux send-keys -t $SESSION_NAME:0.1 "CUDA_VISIBLE_DEVICES=3 vllm serve Qwen/Qwen2.5-7B-Instruct-GPTQ-Int8 --port 8002 --dtype float16 --gpu-memory-utilization 0.85 --max-model-len 17000 --enable-auto-tool-choice --tool-call-parser hermes" C-m
 
 #Pane 0.2: BGE-Reranker (GPU 2)
 tmux send-keys -t $SESSION_NAME:0.2 "$SETUP_CMD" C-m

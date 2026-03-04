@@ -1,4 +1,4 @@
-import os, json
+import json
 import numpy as np
 from typing import List, Dict, Optional
 from collections import defaultdict
@@ -12,7 +12,6 @@ from ragas.metrics.collections import (
 
 from langchain_huggingface import HuggingFaceEmbeddings
 from NLI_evaluator import NLIEvaluator
-#from ..src.utils.file_io import read_json_file
 
 from dotenv import load_dotenv
 
@@ -33,36 +32,6 @@ class PreprocessingEvaluator:
         self.exact_match = ExactMatch()
         self.nli_evaluator = NLIEvaluator()
         self.chrf = CHRFScore()
-
-    # def _align_emails(self, predicted: List[dict], ground_truth: List[dict]) -> Dict[int, Optional[int]]:
-    #     """
-    #     Align predicted emails to ground truth emails.
-    #     Multiple predicted emails may align to the same GT email.
-    #     """
-    #     alignment = {}
-
-    #     p_txt = [f"from: {item.get('from','')}\nsent: {item.get('sent','')}\nto:{item.get('to','')}\ncc:{item.get('cc','')}\nsubject:{item.get('subject','')}\nbody:{item.get('body','')}" 
-    #                 for item in predicted]
-    #     gt_txt = [f"from: {item.get('from','')}\nsent: {item.get('sent','')}\nto:{item.get('to','')}\ncc:{item.get('cc','')}\nsubject:{item.get('subject','')}\nbody:{item.get('body','')}" 
-    #                 for item in ground_truth]
-        
-    #     for p_idx, p_text in enumerate(p_txt):
-    #         best_score = 0.0
-    #         best_gt = None
-
-    #         for g_idx, g_text in enumerate(gt_txt):
-    #             score = self.chrf.score(
-    #                 response=p_text,
-    #                 reference=g_text,
-    #             )
-
-    #             if score > best_score:
-    #                 best_score = score
-    #                 best_gt = g_idx
-
-    #         alignment[p_idx] = best_gt if best_score >= self.alignment_threshold else None
-
-    #     return alignment
 
     def _align_emails(self, predicted: List[dict], ground_truth: List[dict]) -> Dict[int, Optional[int]]:
         """
@@ -221,7 +190,7 @@ class PreprocessingEvaluator:
         return results
 
 def main():
-    results_dir = Path(__file__).parent / "results"
+    results_dir = Path(__file__).parent / "preprocessing_results"
     json_path = (
             results_dir
             / f"results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"

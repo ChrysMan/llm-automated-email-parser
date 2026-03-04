@@ -6,7 +6,7 @@ from email import message_from_string
 from langchain_core.output_parsers import JsonOutputParser
 from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig
 
-from lightrag_impl.prompts.preprocessing_prompts import EmailInfo, cleaning_prompt, formatter_and_translator_prompt
+from prompts.preprocessing_prompts import EmailInfo, cleaning_prompt, formatter_and_translator_prompt
 from utils.email_utils import extract_msg_file, clean_data, split_email_thread
 from utils.logging import LOGGER
 
@@ -14,13 +14,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-langsmith_api_key = os.getenv("LANGSMITH_API_KEY")
-if langsmith_api_key:
-    os.environ["LANGCHAIN_TRACING_V2"] = "true"
-    os.environ["LANGCHAIN_ENDPOINT"]="https://api.smith.langchain.com"
-    os.environ["LANGSMITH_PROJECT"] = "email_preprocessing"
-else:
-    LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
+# langsmith_api_key = os.getenv("LANGSMITH_API_KEY")
+# if langsmith_api_key:
+#     os.environ["LANGCHAIN_TRACING_V2"] = "true"
+#     os.environ["LANGCHAIN_ENDPOINT"]="https://api.smith.langchain.com"
+#     os.environ["LANGSMITH_PROJECT"] = "email_preprocessing"
+# else:
+#     LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
 
 
 parser = JsonOutputParser(pydantic_object=EmailInfo, json_compatible=True)

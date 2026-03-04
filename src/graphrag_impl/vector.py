@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
-from llm import llm, embedding_provider
-from graph import graph
+from .llm import llm, embedding_provider
+from .graph import graph
 from langchain_neo4j import Neo4jVector
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
 from langchain_classic.chains.retrieval import create_retrieval_chain
@@ -66,8 +66,10 @@ Consider the conversation history if provided to maintain conversational flow an
   - The response MUST be in the same language as the user query.
   - The response MUST utilize Markdown formatting for enhanced clarity and structure (e.g., headings, bold text, bullet points).
 """
+
 instructions = ("""
-Retrieve only Entities with type "Chunk".
+Retrieve only Entities of type "Chunk".
+                
 {context}
 """
 

@@ -12,23 +12,20 @@ from utils.file_io import read_json_file
 
 
 WORKING_DIR = "lightrag_impl/core/rag_storage"
-# os.makedirs(WORKING_DIR, exist_ok=True)
 
 async def initialize_rag(working_dir: str = WORKING_DIR) -> LightRAG:
 
     rag = LightRAG(
         working_dir=working_dir,
         graph_storage="Neo4JStorage",
-        llm_model_func=llm_model_func, #ollama_model_complete,
-        #llm_model_name="qwen2.5:14b", #"Piyush20/Qwen_14B_Quantized", #"qwen2.5:14b", #"llama3.1:8b",
+        llm_model_func=llm_model_func, 
         llm_model_max_async=4,
-        #llm_model_kwargs={"host": "http://localhost:11434", "options": {"num_ctx": 32768}},
         vector_storage="FaissVectorDBStorage",
         rerank_model_func=rerunk_func,
         embedding_func=EmbeddingFunc(
-            embedding_dim=1024,
-            max_token_size=8192,
-            func=partial(ollama_embed.func, embed_model="bge-m3:latest", host="http://localhost:11434") # Need to pull it first
+            embedding_dim=768,#1024,
+            max_token_size=2048,#8192,
+            func=partial(ollama_embed.func, embed_model="embeddinggemma:latest", host="http://localhost:11434") # Need to pull it first | bge-m3:latest
         )
     )
 
@@ -61,17 +58,6 @@ async def index_data(rag: LightRAG, dir_path: str)-> str:
                 await rag.ainsert(input=list_of_texts, file_paths=file_paths)
                 
                 return f"Indexing of data from {file_path} completed at {time()-tic} seconds."
-
-
-    # if file_path.endswith(".pdf"):
-    #     with pdfplumber.open(file_path) as pdf:
-    #         text = "\n".join(page.extract_text() for page in pdf.pages)
-    #     text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-    #     texts = text_splitter.split_text(text)
-    #     await rag.ainsert(texts)
-    # else:
-    #     LOGGER.warning(f"Unsupported file format for {file_path}")
-    # deepseek modelo
 
 
 async def run_async_query(rag: LightRAG, question: str, mode: str) -> dict[str, Any]:

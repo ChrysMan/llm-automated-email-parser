@@ -8,20 +8,20 @@ from typing import List
 
 from utils.logging import LOGGER
 from utils.email_utils import extract_msg_file, clean_data, split_email_thread
-from lightrag_impl.prompts.preprocessing_prompts import cleaning_prompt, formatter_and_translator_prompt
+from prompts.preprocessing_prompts import cleaning_prompt, formatter_and_translator_prompt
 
 #os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 os.environ["VLLM_DISABLE_COMPILE_CACHE"] = "0"
 
 load_dotenv()
 
-langsmith_api_key = os.getenv("LANGSMITH_API_KEY")
-if langsmith_api_key:
-    os.environ["LANGCHAIN_TRACING_V2"] = "true"
-    os.environ["LANGCHAIN_ENDPOINT"]="https://api.smith.langchain.com"
-    os.environ["LANGSMITH_PROJECT"] = "email_preprocessing"
-else:
-    LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
+# langsmith_api_key = os.getenv("LANGSMITH_API_KEY")
+# if langsmith_api_key:
+#     os.environ["LANGCHAIN_TRACING_V2"] = "true"
+#     os.environ["LANGCHAIN_ENDPOINT"]="https://api.smith.langchain.com"
+#     os.environ["LANGSMITH_PROJECT"] = "email_preprocessing"
+# else:
+#     LOGGER.warning("Langsmith API key not found. Tracing will be disabled.")
 
 class LLMPredictor:
 

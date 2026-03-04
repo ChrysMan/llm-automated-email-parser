@@ -4,7 +4,6 @@ import numpy as np
 from typing import List
 from langchain_huggingface import HuggingFaceEmbeddings
 
-#from lightrag_impl.core.llm import hf
 from utils.logging import LOGGER
 from utils.file_io import read_json_file
 
@@ -43,11 +42,9 @@ def deduplicate_emails(dict_list: List[dict]) -> list[str]:
 
         body = np.array(body, dtype=np.float32).reshape(1, -1)
 
-        
         if dedup_index is None:
             try:
                 dim = len(body[0]) 
-                #dim = doc_bodies.vector.shape[0]
                 dedup_index = faiss.IndexFlatIP(dim)
                 dedup_index.add(body)
                 unique_emails.append(email)
@@ -61,7 +58,7 @@ def deduplicate_emails(dict_list: List[dict]) -> list[str]:
                 matched_index = Ind[0][0]
                 mathed_email = unique_emails[matched_index]
             except Exception as e:
-                LOGGER.error(f"Error here!: {e}")
+                LOGGER.error(f"Error at search: {e}")
 
             if similarity < 0.981:
                 dedup_index.add(body)   # add to in memory db
@@ -92,7 +89,6 @@ if __name__ == "__main__":
         output_path = os.path.join(dir_path, f"{os.path.basename(dir_path)}_unique.json")
         
         emails_json = []
-        #write_file("", output_path)  
 
         print(len(unique_emails))
         for text in unique_emails:

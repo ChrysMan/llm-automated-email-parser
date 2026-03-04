@@ -1,11 +1,11 @@
-from dotenv import load_dotenv
-load_dotenv()
-from time import time
-from llm import llm
-from graph import graph
+from .llm import llm
+from .graph import graph
 
 from langchain_neo4j import GraphCypherQAChain
 from langchain_core.prompts import PromptTemplate
+from dotenv import load_dotenv
+
+load_dotenv()
 
 CYPHER_GENERATION_TEMPLATE = """Task:Generate Cypher statement to query a graph database.
 Instructions:
@@ -60,9 +60,6 @@ graph_schema = f"""Node Types and their Properties:
 {node_str}
 Relationship Types:
 [DIRECTED, PART_OF, HAS_REFERENCE_NUMBER]"""
-#{rel_str}"""
-
-#print("\nGraph Schema:\n", graph_schema)
 
 cypher_generation_prompt = PromptTemplate(
     template=CYPHER_GENERATION_TEMPLATE,
@@ -98,7 +95,6 @@ cypher_chain = GraphCypherQAChain.from_llm(
     graph=graph,
     cypher_prompt=cypher_generation_prompt,
     return_direct=True,
-    #qa_prompt=cypher_qa_prompt,
     validate_cypher = True,
     verbose=True,
     allow_dangerous_requests=True,

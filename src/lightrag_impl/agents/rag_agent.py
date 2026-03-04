@@ -1,6 +1,5 @@
 import asyncio
 from typing import List
-from lightrag.lightrag import QueryParam
 from pydantic import BaseModel, Field
 from pydantic_ai import RunContext
 from pydantic_ai.agent import Agent
@@ -9,7 +8,6 @@ from dotenv import load_dotenv
 from ..core.pipeline import initialize_rag, run_async_query
 from ..core.llm import ref_llm, agent_llm
 from ..agents.dependencies import AgentDeps
-from utils.logging import LOGGER
 
 load_dotenv()
 

@@ -79,6 +79,7 @@ class OCR_LLMPredictor:
             responses.append(response.choices[0].message.content)
             
         return responses
+    
 os.environ["VLLM_ATTENTION_BACKEND"] = "XFORMERS" # Most stable for V100
 os.environ["VLLM_USE_TRITON_FLASH_ATTN"] = "0"
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
