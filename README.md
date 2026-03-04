@@ -8,7 +8,7 @@ It presents a high-performance Multi-Agent System (MAS) that converts unstructur
 - Offline batched inference using vLLM engine
 - Concurrent inference via vLLM HTTP server
 
-**Experimented with two prompting methods:**
+**Experimented with two prompting methods for preprocessing:**
 - 4 Prompts: Four distinct prompts for translation, formatting, headers, and body.
 - 2 Prompts: Two distinct prompts that combine translation with formatting, and headers with body.
   
