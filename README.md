@@ -85,7 +85,7 @@ python -m streamlit run graphrag_impl/bot.py
 ##### Note: 
 */path/to/your/data/directory should be replaced with the actual path where your `.msg` files are stored.*
 
-#### Third approach: GraphRAG on Knowledge Graph using [LightRAG](https://github.com/HKUDS/LightRAG)
+#### Third approach: GraphRAG on Knowledge Graph using [LightRAG](https://github.com/HKUDS/LightRAG) framework
 This is the final implementation chosen for the project, integrating the multi-agent system with the Streamlit interface and FastAPI backend.
 ```sh
 cd src
