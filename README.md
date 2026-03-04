@@ -102,6 +102,7 @@ python -m streamlit run lightrag_impl/ui/streamlit_ui.py
 Run the following command in your project's root directory:
 
 ```sh
+cd evaluation
 conda eval-env create -f environment.yml
 conda activate eval-env
 ```
