@@ -8,14 +8,14 @@ Three inference techniques were evaluated:
 - Offline batched inference using vLLM engine
 - Concurrent inference via vLLM HTTP server
 
+Experimented with two prompting methods:
+- 4 Prompts: Four distinct prompts for translation, formatting, headers, and body.
+- 2 Prompts: Two distinct prompts that combine translation with formatting, and headers with body.
+  
 Three different RAG architectures were implemented: 
 - Naive RAG on Vector Database
 - GraphRAG
 - Advanced GraphRAg using [LightRAG](https://github.com/HKUDS/LightRAG) framework
-
-Experimented with two prompting methods:
-- 4 Prompts: Four distinct prompts for translation, formatting, headers, and body.
-- 2 Prompts: Two distinct prompts that combine translation with formatting, and headers with body.
 
 ## Final System Architecture 
 <p align="center">
