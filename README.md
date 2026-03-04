@@ -14,8 +14,8 @@ It presents a high-performance Multi-Agent System (MAS) that converts unstructur
   
 **Three different RAG architectures were implemented:** 
 - Naive RAG on Vector Database
-- GraphRAG
-- Advanced GraphRAg using [LightRAG](https://github.com/HKUDS/LightRAG) framework
+- GraphRAG on Knowledge Graph
+- Advanced GraphRAg on Knowledge Graph using [LightRAG](https://github.com/HKUDS/LightRAG) framework
 
 ## Final System Architecture 
 <p align="center">
